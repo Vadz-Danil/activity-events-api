@@ -41,3 +41,37 @@ h1 {
   color: var(--muted);
   line-height: 1.6;
 }
+
+.error {
+  margin: 16px 0 0;
+  color: var(--bad);
+}
+
+.card {
+  margin-top: 24px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.button,
+button {
+  padding: 10px 16px;
+  font: inherit;
+  color: var(--text);
+  background: var(--accent);
+  border: 0;
+  border-radius: 8px;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+button {
+  background: transparent;
+  border: 1px solid var(--border);
+}

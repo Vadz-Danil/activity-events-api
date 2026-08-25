@@ -9,7 +9,6 @@ CREATE TABLE users (
     CONSTRAINT users_role_check CHECK (role IN ('user', 'admin'))
 );
 
--- Пошук і логін нечутливі до регістру, тому унікальність теж по lower(email).
 CREATE UNIQUE INDEX users_email_lower_key ON users (lower(email));
 
 -- +goose Down

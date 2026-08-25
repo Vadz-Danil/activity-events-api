@@ -13,26 +13,26 @@ endif
         migrate-up migrate-down migrate-up-to migrate-down-to migrate-redo migrate-status migrate-create
 
 help:
-	@echo "  up              підняти весь стек"
-	@echo "  infra           лише база та моніторинг"
-	@echo "  dev             стек із фронтом у режимі vite dev (HMR)"
-	@echo "  down            зупинити стек"
-	@echo "  clean           зупинити і видалити томи з даними"
-	@echo "  logs            дивитися логи"
-	@echo "  ps              стан контейнерів"
-	@echo "  psql            psql у контейнері бази"
+	@echo "  up              start the whole stack"
+	@echo "  infra           database and monitoring only"
+	@echo "  dev             stack with the frontend in vite dev mode (HMR)"
+	@echo "  down            stop the stack"
+	@echo "  clean           stop and drop data volumes"
+	@echo "  logs            follow logs"
+	@echo "  ps              container status"
+	@echo "  psql            psql inside the database container"
 	@echo ""
-	@echo "  migrate-up      накотити всі міграції"
-	@echo "  migrate-down    відкотити останню міграцію"
-	@echo "  migrate-up-to   накотити до версії: make migrate-up-to v=3"
-	@echo "  migrate-down-to відкотити до версії: make migrate-down-to v=1"
-	@echo "  migrate-redo    перекотити останню міграцію"
-	@echo "  migrate-status  стан міграцій"
-	@echo "  migrate-create  новий файл міграції: make migrate-create name=add_events"
+	@echo "  migrate-up      apply all migrations"
+	@echo "  migrate-down    roll back the last migration"
+	@echo "  migrate-up-to   apply up to a version: make migrate-up-to v=3"
+	@echo "  migrate-down-to roll back to a version: make migrate-down-to v=1"
+	@echo "  migrate-redo    re-apply the last migration"
+	@echo "  migrate-status  migration status"
+	@echo "  migrate-create  new migration file: make migrate-create name=add_events"
 	@echo ""
-	@echo "  build           зібрати бінарники локально"
-	@echo "  test            прогнати тести"
-	@echo "  tidy            упорядкувати залежності"
+	@echo "  build           build binaries locally"
+	@echo "  test            run tests"
+	@echo "  tidy            tidy dependencies"
 
 up:
 	$(COMPOSE) up -d --build
@@ -65,11 +65,11 @@ migrate-down:
 	$(MIGRATE) down
 
 migrate-up-to:
-	@test -n "$(v)" || { echo "вкажи версію: make migrate-up-to v=3"; exit 1; }
+	@test -n "$(v)" || { echo "pass a version: make migrate-up-to v=3"; exit 1; }
 	$(MIGRATE) up-to $(v)
 
 migrate-down-to:
-	@test -n "$(v)" || { echo "вкажи версію: make migrate-down-to v=1"; exit 1; }
+	@test -n "$(v)" || { echo "pass a version: make migrate-down-to v=1"; exit 1; }
 	$(MIGRATE) down-to $(v)
 
 migrate-redo:
@@ -79,7 +79,7 @@ migrate-status:
 	$(MIGRATE) status
 
 migrate-create:
-	@test -n "$(name)" || { echo "вкажи назву: make migrate-create name=add_events"; exit 1; }
+	@test -n "$(name)" || { echo "pass a name: make migrate-create name=add_events"; exit 1; }
 	$(MIGRATE) create $(name) sql
 
 build:

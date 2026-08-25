@@ -11,7 +11,7 @@ func Recovery(log *zap.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		defer func() {
 			if r := recover(); r != nil {
-				log.Error("паніка під час обробки запиту",
+				log.Error("panic while handling request",
 					zap.Any("panic", r),
 					zap.String("method", c.Request.Method),
 					zap.String("path", c.Request.URL.Path),
@@ -22,7 +22,7 @@ func Recovery(log *zap.Logger) gin.HandlerFunc {
 				c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{
 					"error": gin.H{
 						"code":    "internal_error",
-						"message": "внутрішня помилка сервера",
+						"message": "Internal server error",
 					},
 					"request_id": RequestIDFrom(c),
 				})

@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"net/http"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
@@ -8,26 +9,42 @@ import (
 	"github.com/Vadz-Danil/activity-events-api/internal/metrics"
 )
 
+var knownMethods = map[string]struct{}{
+	http.MethodGet:     {},
+	http.MethodHead:    {},
+	http.MethodPost:    {},
+	http.MethodPut:     {},
+	http.MethodPatch:   {},
+	http.MethodDelete:  {},
+	http.MethodOptions: {},
+}
+
 func Metrics(m *metrics.Metrics) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		route := c.FullPath()
 		if route == "" {
 			route = "unmatched"
 		}
+		method := requestMethod(c.Request.Method)
 
-		timer := m.NewTimer(c.Request.Method, route)
+		timer := m.NewTimer(method, route)
 		m.HTTPInFlight.Inc()
 
-		// Через defer, щоб лічильник запитів в обробці не «протікав»,
-		// якщо нижче по ланцюжку хтось запанікує.
 		defer func() {
 			timer.ObserveDuration()
 			m.HTTPInFlight.Dec()
 			m.HTTPRequests.
-				WithLabelValues(c.Request.Method, route, strconv.Itoa(c.Writer.Status())).
+				WithLabelValues(method, route, strconv.Itoa(c.Writer.Status())).
 				Inc()
 		}()
 
 		c.Next()
 	}
+}
+
+func requestMethod(method string) string {
+	if _, ok := knownMethods[method]; ok {
+		return method
+	}
+	return "other"
 }

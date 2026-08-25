@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	_ "github.com/jackc/pgx/v5/stdlib" // драйвер database/sql для goose
+	_ "github.com/jackc/pgx/v5/stdlib" // database/sql driver for goose
 	"github.com/pressly/goose/v3"
 	"go.uber.org/zap"
 )
@@ -25,12 +25,12 @@ func NewMigrator(dsn, dir string, log *zap.Logger) *Migrator {
 
 func (m *Migrator) Run(ctx context.Context, command string, args ...string) error {
 	if _, err := os.Stat(m.dir); err != nil {
-		return fmt.Errorf("migrator: тека міграцій %q недоступна: %w", m.dir, err)
+		return fmt.Errorf("migrator: migrations dir %q is not accessible: %w", m.dir, err)
 	}
 
 	goose.SetLogger(gooseLogger{m.log})
 	if err := goose.SetDialect("postgres"); err != nil {
-		return fmt.Errorf("migrator: діалект goose: %w", err)
+		return fmt.Errorf("migrator: set goose dialect: %w", err)
 	}
 
 	if command == "create" || command == "fix" {
@@ -40,7 +40,7 @@ func (m *Migrator) Run(ctx context.Context, command string, args ...string) erro
 
 	db, err := sql.Open("pgx", m.dsn)
 	if err != nil {
-		return fmt.Errorf("migrator: підключення до бази: %w", err)
+		return fmt.Errorf("migrator: connect to database: %w", err)
 	}
 	defer func() { _ = db.Close() }()
 
@@ -48,21 +48,21 @@ func (m *Migrator) Run(ctx context.Context, command string, args ...string) erro
 		return err
 	}
 
-	m.log.Info("виконую міграції",
+	m.log.Info("running migrations",
 		zap.String("command", command),
 		zap.String("dir", m.dir),
 	)
 
 	if err := goose.RunContext(ctx, command, db, m.dir, args...); err != nil {
-		return fmt.Errorf("migrator: команда %q: %w", command, err)
+		return fmt.Errorf("migrator: command %q: %w", command, err)
 	}
 
 	version, err := goose.GetDBVersionContext(ctx, db)
 	if err != nil {
-		return fmt.Errorf("migrator: версія схеми: %w", err)
+		return fmt.Errorf("migrator: schema version: %w", err)
 	}
 
-	m.log.Info("готово", zap.Int64("schema_version", version))
+	m.log.Info("done", zap.Int64("schema_version", version))
 	return nil
 }
 
@@ -76,10 +76,10 @@ func waitForDB(ctx context.Context, db *sql.DB, log *zap.Logger) error {
 			return nil
 		}
 		if attempt >= attempts {
-			return fmt.Errorf("migrator: база недоступна після %d спроб: %w", attempt, err)
+			return fmt.Errorf("migrator: database unavailable after %d attempts: %w", attempt, err)
 		}
 
-		log.Warn("база недоступна, повторна спроба",
+		log.Warn("database is unavailable, retrying",
 			zap.Int("attempt", attempt),
 			zap.Duration("backoff", backoff),
 			zap.Error(err),

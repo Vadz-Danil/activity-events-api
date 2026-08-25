@@ -11,6 +11,7 @@ import (
 
 	"go.uber.org/zap"
 
+	"github.com/Vadz-Danil/activity-events-api/internal/app"
 	"github.com/Vadz-Danil/activity-events-api/internal/config"
 	"github.com/Vadz-Danil/activity-events-api/internal/database"
 	"github.com/Vadz-Danil/activity-events-api/internal/logger"
@@ -40,7 +41,7 @@ func run() error {
 	}
 	defer func() { _ = log.Sync() }()
 
-	log.Info("старт застосунку",
+	log.Info("starting application",
 		zap.String("version", version),
 		zap.String("env", cfg.App.Env),
 		zap.String("mode", string(cfg.App.Mode)),
@@ -55,26 +56,23 @@ func run() error {
 	}
 	defer pool.Close()
 
-	m := metrics.New(string(cfg.App.Mode))
+	deps, err := app.BuildDeps(cfg, pool, metrics.New(string(cfg.App.Mode)), log, version)
+	if err != nil {
+		return err
+	}
 
 	srv := &http.Server{
-		Addr: cfg.HTTP.Addr(),
-		Handler: router.New(router.Deps{
-			Config:  cfg,
-			Logger:  log,
-			Pool:    pool,
-			Metrics: m,
-			Version: version,
-		}),
+		Addr:         cfg.HTTP.Addr(),
+		Handler:      router.New(deps),
 		ReadTimeout:  cfg.HTTP.ReadTimeout,
 		WriteTimeout: cfg.HTTP.WriteTimeout,
 	}
 
 	errCh := make(chan error, 1)
 	go func() {
-		log.Info("http-сервер слухає", zap.String("addr", srv.Addr))
+		log.Info("http server is listening", zap.String("addr", srv.Addr))
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			errCh <- fmt.Errorf("http-сервер: %w", err)
+			errCh <- fmt.Errorf("http server: %w", err)
 		}
 	}()
 
@@ -82,7 +80,7 @@ func run() error {
 	case err := <-errCh:
 		return err
 	case <-ctx.Done():
-		log.Info("отримано сигнал зупинки, завершуємо роботу")
+		log.Info("shutdown signal received, stopping")
 	}
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), cfg.HTTP.ShutdownTimeout)
@@ -92,6 +90,6 @@ func run() error {
 		return fmt.Errorf("graceful shutdown: %w", err)
 	}
 
-	log.Info("зупинено коректно")
+	log.Info("stopped gracefully")
 	return nil
 }

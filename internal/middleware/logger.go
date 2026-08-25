@@ -38,11 +38,11 @@ func Logger(log *zap.Logger, skipPaths ...string) gin.HandlerFunc {
 
 		switch {
 		case c.Writer.Status() >= 500:
-			log.Error("http-запит", fields...)
+			log.Error("http request", fields...)
 		case c.Writer.Status() >= 400:
-			log.Warn("http-запит", fields...)
+			log.Warn("http request", fields...)
 		default:
-			log.Info("http-запит", fields...)
+			log.Info("http request", fields...)
 		}
 	}
 }

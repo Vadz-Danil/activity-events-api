@@ -14,7 +14,7 @@ import (
 func Connect(ctx context.Context, cfg config.DB, log *zap.Logger) (*pgxpool.Pool, error) {
 	poolCfg, err := pgxpool.ParseConfig(cfg.URL)
 	if err != nil {
-		return nil, fmt.Errorf("database: розбір DATABASE_URL: %w", err)
+		return nil, fmt.Errorf("database: parse DATABASE_URL: %w", err)
 	}
 
 	poolCfg.MaxConns = cfg.MaxConns
@@ -25,7 +25,7 @@ func Connect(ctx context.Context, cfg config.DB, log *zap.Logger) (*pgxpool.Pool
 
 	pool, err := pgxpool.NewWithConfig(ctx, poolCfg)
 	if err != nil {
-		return nil, fmt.Errorf("database: створення пулу: %w", err)
+		return nil, fmt.Errorf("database: create pool: %w", err)
 	}
 
 	if err := ping(ctx, pool, cfg, log); err != nil {
@@ -33,7 +33,7 @@ func Connect(ctx context.Context, cfg config.DB, log *zap.Logger) (*pgxpool.Pool
 		return nil, err
 	}
 
-	log.Info("підключення до postgres встановлено",
+	log.Info("connected to postgres",
 		zap.Int32("max_conns", cfg.MaxConns),
 		zap.Int32("min_conns", cfg.MinConns),
 	)
@@ -49,10 +49,10 @@ func ping(ctx context.Context, pool *pgxpool.Pool, cfg config.DB, log *zap.Logge
 			return nil
 		}
 		if attempt >= cfg.ConnectRetries {
-			return fmt.Errorf("database: не вдалося підключитися за %d спроб: %w", attempt, err)
+			return fmt.Errorf("database: could not connect after %d attempts: %w", attempt, err)
 		}
 
-		log.Warn("база недоступна, повторна спроба",
+		log.Warn("database is unavailable, retrying",
 			zap.Int("attempt", attempt),
 			zap.Duration("backoff", backoff),
 			zap.Error(err),

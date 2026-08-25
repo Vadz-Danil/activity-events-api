@@ -11,7 +11,7 @@ import (
 func New(level, format string) (*zap.Logger, error) {
 	lvl, err := zapcore.ParseLevel(level)
 	if err != nil {
-		return nil, fmt.Errorf("logger: невідомий рівень %q: %w", level, err)
+		return nil, fmt.Errorf("logger: unknown level %q: %w", level, err)
 	}
 
 	encCfg := zap.NewProductionEncoderConfig()
