@@ -19,6 +19,23 @@ services:
       retries: 10
       start_period: 5s
 
+  migrate:
+    build:
+      context: .
+      args:
+        VERSION: ${VERSION:-dev}
+    image: activity-events-api:local
+    restart: "no"
+    entrypoint: ["migrate"]
+    command: ["up"]
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-app}:${POSTGRES_PASSWORD:-app}@postgres:5432/${POSTGRES_DB:-activity}?sslmode=disable
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      LOG_FORMAT: ${LOG_FORMAT:-console}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   api:
     build:
       context: .
@@ -39,6 +56,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/healthz"]
       interval: 10s
@@ -56,10 +75,11 @@ services:
       DATABASE_URL: postgres://${POSTGRES_USER:-app}:${POSTGRES_PASSWORD:-app}@postgres:5432/${POSTGRES_DB:-activity}?sslmode=disable
       LOG_LEVEL: ${LOG_LEVEL:-info}
       LOG_FORMAT: ${LOG_FORMAT:-console}
-      DB_MIGRATE_ON_START: "false"
     depends_on:
       postgres:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
       api:
         condition: service_healthy
     healthcheck:
