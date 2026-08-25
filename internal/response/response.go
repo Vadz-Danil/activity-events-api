@@ -13,6 +13,7 @@ const (
 	CodeNotFound            = "not_found"
 	CodePayloadTooLarge     = "payload_too_large"
 	CodeInvalidOAuthState   = "invalid_oauth_state"
+	CodeInvalidCursor       = "invalid_cursor"
 	CodeGoogleDisabled      = "google_disabled"
 	CodeGoogleUnverified    = "google_email_unverified"
 	CodeInternal            = "internal_error"

@@ -18,6 +18,7 @@ type Deps struct {
 	Metrics *metrics.Metrics
 	Version string
 	Auth    *handler.Auth
+	Events  *handler.Event
 	Guard   *middleware.Guard
 }
 
@@ -71,4 +72,13 @@ func registerAPI(engine *gin.Engine, d Deps) {
 	authRoutes.POST("/refresh", d.Auth.Refresh)
 	authRoutes.POST("/logout", d.Auth.Logout)
 	authRoutes.GET("/me", d.Guard.RequireAuth(), d.Auth.Me)
+
+	if d.Events == nil {
+		return
+	}
+
+	events := v1.Group("/events", d.Guard.RequireAuth())
+	events.POST("", d.Events.Create)
+	events.POST("/batch", d.Events.CreateBatch)
+	events.GET("", d.Events.List)
 }

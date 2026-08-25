@@ -74,7 +74,13 @@ func wireAuth(deps *router.Deps, cfg *config.Config, pool *pgxpool.Pool, log *za
 		return err
 	}
 
+	eventService := service.NewEvent(service.EventDeps{
+		Events: repository.NewEventRepository(pool),
+		Logger: log,
+	})
+
 	deps.Auth = handler.NewAuth(authService, log, cfg.App.FrontendURL)
+	deps.Events = handler.NewEvent(eventService, log)
 	deps.Guard = middleware.NewGuard(jwtManager)
 
 	return nil
