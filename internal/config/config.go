@@ -22,13 +22,20 @@ func (m Mode) RunsAPI() bool    { return m == ModeAPI || m == ModeAll }
 func (m Mode) RunsWorker() bool { return m == ModeWorker || m == ModeAll }
 
 type Config struct {
-	App    App
-	HTTP   HTTP
-	Log    Log
-	DB     DB
-	CORS   CORS
-	Auth   Auth
-	Google Google
+	App         App
+	HTTP        HTTP
+	Log         Log
+	DB          DB
+	CORS        CORS
+	Auth        Auth
+	Google      Google
+	Aggregation Aggregation
+}
+
+type Aggregation struct {
+	Bucket   time.Duration
+	Tick     time.Duration
+	Backfill int
 }
 
 type App struct {
@@ -136,6 +143,11 @@ func Load() (*Config, error) {
 			RefreshTTL:   envDuration("JWT_REFRESH_TTL", 30*24*time.Hour),
 			BcryptCost:   envInt("BCRYPT_COST", 12),
 		},
+		Aggregation: Aggregation{
+			Bucket:   envDuration("AGGREGATION_BUCKET", 4*time.Hour),
+			Tick:     envDuration("AGGREGATION_TICK", 5*time.Minute),
+			Backfill: envInt("AGGREGATION_BACKFILL", 12),
+		},
 		Google: Google{
 			ClientID:     env("GOOGLE_CLIENT_ID", ""),
 			ClientSecret: env("GOOGLE_CLIENT_SECRET", ""),
@@ -167,6 +179,17 @@ func (c *Config) validate() error {
 	}
 	if c.HTTP.ShutdownTimeout <= 0 {
 		return fmt.Errorf("config: SHUTDOWN_TIMEOUT must be positive")
+	}
+
+	switch {
+	case c.Aggregation.Bucket <= 0:
+		return fmt.Errorf("config: AGGREGATION_BUCKET must be positive")
+	case 24*time.Hour%c.Aggregation.Bucket != 0:
+		return fmt.Errorf("config: AGGREGATION_BUCKET (%s) must divide 24h evenly", c.Aggregation.Bucket)
+	case c.Aggregation.Tick <= 0:
+		return fmt.Errorf("config: AGGREGATION_TICK must be positive")
+	case c.Aggregation.Backfill <= 0:
+		return fmt.Errorf("config: AGGREGATION_BACKFILL must be positive")
 	}
 
 	if !c.App.Mode.RunsAPI() {

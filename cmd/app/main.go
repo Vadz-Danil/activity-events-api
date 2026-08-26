@@ -56,9 +56,18 @@ func run() error {
 	}
 	defer pool.Close()
 
-	deps, err := app.BuildDeps(cfg, pool, metrics.New(string(cfg.App.Mode)), log, version)
+	deps, worker, err := app.BuildDeps(cfg, pool, metrics.New(string(cfg.App.Mode)), log, version)
 	if err != nil {
 		return err
+	}
+
+	var workerStopped chan struct{}
+	if worker != nil {
+		workerStopped = make(chan struct{})
+		go func() {
+			defer close(workerStopped)
+			worker.Run(ctx)
+		}()
 	}
 
 	srv := &http.Server{
@@ -88,6 +97,14 @@ func run() error {
 
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		return fmt.Errorf("graceful shutdown: %w", err)
+	}
+
+	if workerStopped != nil {
+		select {
+		case <-workerStopped:
+		case <-shutdownCtx.Done():
+			log.Warn("worker did not stop within the shutdown timeout")
+		}
 	}
 
 	log.Info("stopped gracefully")

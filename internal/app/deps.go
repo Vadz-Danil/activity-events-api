@@ -11,10 +11,11 @@ import (
 	"github.com/Vadz-Danil/activity-events-api/internal/middleware"
 	"github.com/Vadz-Danil/activity-events-api/internal/repository"
 	"github.com/Vadz-Danil/activity-events-api/internal/router"
+	"github.com/Vadz-Danil/activity-events-api/internal/scheduler"
 	"github.com/Vadz-Danil/activity-events-api/internal/service"
 )
 
-func BuildDeps(cfg *config.Config, pool *pgxpool.Pool, m *metrics.Metrics, log *zap.Logger, version string) (router.Deps, error) {
+func BuildDeps(cfg *config.Config, pool *pgxpool.Pool, m *metrics.Metrics, log *zap.Logger, version string) (router.Deps, *scheduler.Scheduler, error) {
 	deps := router.Deps{
 		Config:  cfg,
 		Logger:  log,
@@ -23,17 +24,33 @@ func BuildDeps(cfg *config.Config, pool *pgxpool.Pool, m *metrics.Metrics, log *
 		Version: version,
 	}
 
-	if !cfg.App.Mode.RunsAPI() {
-		return deps, nil
+	aggregation := service.NewAggregation(service.AggregationDeps{
+		Repo:     repository.NewAggregationRepository(pool),
+		Logger:   log,
+		Bucket:   cfg.Aggregation.Bucket,
+		Backfill: cfg.Aggregation.Backfill,
+	})
+
+	var worker *scheduler.Scheduler
+	if cfg.App.Mode.RunsWorker() {
+		worker = scheduler.New(scheduler.Deps{
+			Aggregator: aggregation,
+			Logger:     log,
+			Tick:       cfg.Aggregation.Tick,
+		})
 	}
 
-	if err := wireAuth(&deps, cfg, pool, log); err != nil {
-		return router.Deps{}, err
+	if !cfg.App.Mode.RunsAPI() {
+		return deps, worker, nil
 	}
-	return deps, nil
+
+	if err := wireAPI(&deps, cfg, pool, log, aggregation); err != nil {
+		return router.Deps{}, nil, err
+	}
+	return deps, worker, nil
 }
 
-func wireAuth(deps *router.Deps, cfg *config.Config, pool *pgxpool.Pool, log *zap.Logger) error {
+func wireAPI(deps *router.Deps, cfg *config.Config, pool *pgxpool.Pool, log *zap.Logger, aggregation *service.Aggregation) error {
 	jwtManager, err := auth.NewManager(cfg.Auth.JWTSecret, cfg.Auth.Issuer, cfg.Auth.AccessTTL)
 	if err != nil {
 		return err
@@ -81,6 +98,7 @@ func wireAuth(deps *router.Deps, cfg *config.Config, pool *pgxpool.Pool, log *za
 
 	deps.Auth = handler.NewAuth(authService, log, cfg.App.FrontendURL)
 	deps.Events = handler.NewEvent(eventService, log)
+	deps.Aggregation = handler.NewAggregation(aggregation, log)
 	deps.Guard = middleware.NewGuard(jwtManager)
 
 	return nil

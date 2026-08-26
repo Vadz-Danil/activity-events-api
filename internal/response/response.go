@@ -14,6 +14,7 @@ const (
 	CodePayloadTooLarge     = "payload_too_large"
 	CodeInvalidOAuthState   = "invalid_oauth_state"
 	CodeInvalidCursor       = "invalid_cursor"
+	CodeBucketNotClosed     = "bucket_not_closed"
 	CodeGoogleDisabled      = "google_disabled"
 	CodeGoogleUnverified    = "google_email_unverified"
 	CodeInternal            = "internal_error"

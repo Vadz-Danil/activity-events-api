@@ -54,6 +54,7 @@ services:
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5173}
       TRUSTED_PROXIES: ${TRUSTED_PROXIES:-}
       MAX_BODY_BYTES: ${MAX_BODY_BYTES:-65536}
+      AGGREGATION_BUCKET: ${AGGREGATION_BUCKET:-4h}
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env (see .env.example)}
       JWT_SECRET_MIN_LEN: ${JWT_SECRET_MIN_LEN:-32}
       JWT_ISSUER: ${JWT_ISSUER:-activity-events-api}
@@ -87,6 +88,9 @@ services:
       DATABASE_URL: postgres://${POSTGRES_USER:-app}:${POSTGRES_PASSWORD:-app}@postgres:5432/${POSTGRES_DB:-activity}?sslmode=disable
       LOG_LEVEL: ${LOG_LEVEL:-info}
       LOG_FORMAT: ${LOG_FORMAT:-console}
+      AGGREGATION_BUCKET: ${AGGREGATION_BUCKET:-4h}
+      AGGREGATION_TICK: ${AGGREGATION_TICK:-5m}
+      AGGREGATION_BACKFILL: ${AGGREGATION_BACKFILL:-12}
     depends_on:
       postgres:
         condition: service_healthy

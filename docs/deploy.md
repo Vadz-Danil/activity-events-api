@@ -121,6 +121,11 @@ LOG_FORMAT=json
 `DB_MIN_CONNS=0` matters: a pool that keeps idle connections open prevents Neon from suspending and burns the monthly
 compute allowance.
 
+Aggregation is tuned by `AGGREGATION_BUCKET` (default `4h`), `AGGREGATION_TICK` (how often the worker looks for closed
+windows, default `5m`) and `AGGREGATION_BACKFILL` (how many windows one pass may catch up on, default `12`). The
+defaults need no configuration; if the bucket size is ever changed, change it on **both** services — the worker writes
+the buckets and the api reads them back, so a mismatch would misalign the statistics.
+
 Point both the liveness and the readiness probe at `/healthz`. `/readyz` pings the database, and a probe running every
 few seconds would keep Neon awake around the clock — roughly 180 CU-hours a month against a free allowance of 100. A
 restart cannot fix a database outage anyway, so probing the process is what the platform actually needs; `/readyz`

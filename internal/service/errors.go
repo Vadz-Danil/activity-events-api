@@ -23,4 +23,6 @@ var (
 	ErrBatchTooLarge            = errors.New("service: batch is too large")
 	ErrInvalidCursor            = errors.New("service: pagination cursor is invalid")
 	ErrInvalidTimeRange         = errors.New("service: from must be before to")
+	ErrBucketNotClosed          = errors.New("service: this bucket has not closed yet")
+	ErrStatsRangeTooLarge       = errors.New("service: requested statistics window is too large")
 )

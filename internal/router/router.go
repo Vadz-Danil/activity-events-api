@@ -9,6 +9,7 @@ import (
 	"github.com/Vadz-Danil/activity-events-api/internal/handler"
 	"github.com/Vadz-Danil/activity-events-api/internal/metrics"
 	"github.com/Vadz-Danil/activity-events-api/internal/middleware"
+	"github.com/Vadz-Danil/activity-events-api/internal/models"
 )
 
 type Deps struct {
@@ -17,9 +18,11 @@ type Deps struct {
 	Pool    *pgxpool.Pool
 	Metrics *metrics.Metrics
 	Version string
-	Auth    *handler.Auth
-	Events  *handler.Event
-	Guard   *middleware.Guard
+
+	Auth        *handler.Auth
+	Events      *handler.Event
+	Aggregation *handler.Aggregation
+	Guard       *middleware.Guard
 }
 
 func New(d Deps) *gin.Engine {
@@ -81,4 +84,15 @@ func registerAPI(engine *gin.Engine, d Deps) {
 	events.POST("", d.Events.Create)
 	events.POST("/batch", d.Events.CreateBatch)
 	events.GET("", d.Events.List)
+
+	if d.Aggregation == nil {
+		return
+	}
+
+	stats := v1.Group("/stats", d.Guard.RequireAuth())
+	stats.GET("/activity", d.Aggregation.Stats)
+
+	admin := v1.Group("/admin", d.Guard.RequireAuth(), d.Guard.RequireRole(models.RoleAdmin))
+	admin.POST("/aggregation/runs", d.Aggregation.Trigger)
+	admin.GET("/aggregation/runs", d.Aggregation.Runs)
 }
