@@ -27,6 +27,7 @@ func BuildDeps(cfg *config.Config, pool *pgxpool.Pool, m *metrics.Metrics, log *
 
 	aggregation := service.NewAggregation(service.AggregationDeps{
 		Repo:     repository.NewAggregationRepository(pool),
+		Metrics:  m,
 		Logger:   log,
 		Bucket:   cfg.Aggregation.Bucket,
 		Backfill: cfg.Aggregation.Backfill,
@@ -45,13 +46,13 @@ func BuildDeps(cfg *config.Config, pool *pgxpool.Pool, m *metrics.Metrics, log *
 		return deps, worker, nil
 	}
 
-	if err := wireAPI(&deps, cfg, pool, log, aggregation); err != nil {
+	if err := wireAPI(&deps, cfg, pool, m, log, aggregation); err != nil {
 		return router.Deps{}, nil, err
 	}
 	return deps, worker, nil
 }
 
-func wireAPI(deps *router.Deps, cfg *config.Config, pool *pgxpool.Pool, log *zap.Logger, aggregation *service.Aggregation) error {
+func wireAPI(deps *router.Deps, cfg *config.Config, pool *pgxpool.Pool, m *metrics.Metrics, log *zap.Logger, aggregation *service.Aggregation) error {
 	jwtManager, err := auth.NewManager(cfg.Auth.JWTSecret, cfg.Auth.Issuer, cfg.Auth.AccessTTL)
 	if err != nil {
 		return err
@@ -92,11 +93,12 @@ func wireAPI(deps *router.Deps, cfg *config.Config, pool *pgxpool.Pool, log *zap
 		return err
 	}
 
-	broker := stream.NewBroker()
+	broker := stream.NewBroker(m)
 
 	eventService := service.NewEvent(service.EventDeps{
 		Events:    repository.NewEventRepository(pool),
 		Publisher: broker,
+		Metrics:   m,
 		Logger:    log,
 	})
 

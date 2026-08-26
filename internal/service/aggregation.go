@@ -30,8 +30,14 @@ type AggregationRepository interface {
 	Daily(ctx context.Context, userID int64, from, to time.Time) ([]models.DailyActivity, error)
 }
 
+type AggregationMetrics interface {
+	RunFinished(status, trigger string, d time.Duration, rows int)
+	LagSeconds(seconds float64)
+}
+
 type Aggregation struct {
 	repo     AggregationRepository
+	metrics  AggregationMetrics
 	log      *zap.Logger
 	now      func() time.Time
 	bucket   time.Duration
@@ -40,6 +46,7 @@ type Aggregation struct {
 
 type AggregationDeps struct {
 	Repo     AggregationRepository
+	Metrics  AggregationMetrics
 	Logger   *zap.Logger
 	Now      func() time.Time
 	Bucket   time.Duration
@@ -64,7 +71,14 @@ func NewAggregation(d AggregationDeps) *Aggregation {
 		backfill = defaultBackfill
 	}
 
-	return &Aggregation{repo: d.Repo, log: log, now: now, bucket: bucket, backfill: backfill}
+	return &Aggregation{
+		repo:     d.Repo,
+		metrics:  d.Metrics,
+		log:      log,
+		now:      now,
+		bucket:   bucket,
+		backfill: backfill,
+	}
 }
 
 type StatsQuery struct {
@@ -120,6 +134,10 @@ func (s *Aggregation) RunBucket(ctx context.Context, at time.Time, trigger model
 	finished := s.now().UTC()
 	run.FinishedAt = &finished
 
+	if s.metrics != nil {
+		s.metrics.RunFinished(string(run.Status), string(trigger), finished.Sub(run.StartedAt), run.UsersTouched)
+	}
+
 	return s.repo.RecordRun(ctx, run)
 }
 
@@ -152,6 +170,7 @@ func (s *Aggregation) pendingBuckets(ctx context.Context) ([]time.Time, error) {
 	if err != nil {
 		return nil, err
 	}
+	s.reportLag(last, newestClosed)
 
 	var from time.Time
 	switch {
@@ -178,6 +197,23 @@ func (s *Aggregation) pendingBuckets(ctx context.Context) ([]time.Time, error) {
 	}
 
 	return buckets, nil
+}
+
+func (s *Aggregation) reportLag(last *time.Time, newestClosed time.Time) {
+	if s.metrics == nil {
+		return
+	}
+
+	if last == nil {
+		s.metrics.LagSeconds(0)
+		return
+	}
+
+	lag := newestClosed.Sub(last.UTC())
+	if lag < 0 {
+		lag = 0
+	}
+	s.metrics.LagSeconds(lag.Seconds())
 }
 
 func (s *Aggregation) Runs(ctx context.Context, limit int) ([]models.AggregationRun, error) {

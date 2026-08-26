@@ -9,19 +9,26 @@ import (
 
 const defaultBuffer = 32
 
+type Metrics interface {
+	SubscriberAdded()
+	SubscriberRemoved()
+	EventDropped()
+}
+
 type Broker struct {
 	mu      sync.RWMutex
 	buffer  int
 	subs    map[int64]map[*subscriber]struct{}
 	dropped atomic.Uint64
+	metrics Metrics
 }
 
 type subscriber struct {
 	events chan models.Event
 }
 
-func NewBroker() *Broker {
-	return &Broker{buffer: defaultBuffer, subs: make(map[int64]map[*subscriber]struct{})}
+func NewBroker(m Metrics) *Broker {
+	return &Broker{buffer: defaultBuffer, subs: make(map[int64]map[*subscriber]struct{}), metrics: m}
 }
 
 func (b *Broker) Subscribe(userID int64) (<-chan models.Event, func()) {
@@ -34,6 +41,10 @@ func (b *Broker) Subscribe(userID int64) (<-chan models.Event, func()) {
 	b.subs[userID][sub] = struct{}{}
 	b.mu.Unlock()
 
+	if b.metrics != nil {
+		b.metrics.SubscriberAdded()
+	}
+
 	var once sync.Once
 	cancel := func() {
 		once.Do(func() {
@@ -45,6 +56,10 @@ func (b *Broker) Subscribe(userID int64) (<-chan models.Event, func()) {
 			b.mu.Unlock()
 
 			close(sub.events)
+
+			if b.metrics != nil {
+				b.metrics.SubscriberRemoved()
+			}
 		})
 	}
 
@@ -60,6 +75,9 @@ func (b *Broker) Publish(e models.Event) {
 		case sub.events <- e:
 		default:
 			b.dropped.Add(1)
+			if b.metrics != nil {
+				b.metrics.EventDropped()
+			}
 		}
 	}
 }

@@ -27,7 +27,7 @@ func receive(t *testing.T, ch <-chan models.Event) models.Event {
 }
 
 func TestEverySubscriberOfTheUserGetsTheEvent(t *testing.T) {
-	broker := NewBroker()
+	broker := NewBroker(nil)
 
 	first, cancelFirst := broker.Subscribe(1)
 	defer cancelFirst()
@@ -43,7 +43,7 @@ func TestEverySubscriberOfTheUserGetsTheEvent(t *testing.T) {
 }
 
 func TestEventsAreNotDeliveredToOtherUsers(t *testing.T) {
-	broker := NewBroker()
+	broker := NewBroker(nil)
 
 	mine, cancel := broker.Subscribe(1)
 	defer cancel()
@@ -58,7 +58,7 @@ func TestEventsAreNotDeliveredToOtherUsers(t *testing.T) {
 }
 
 func TestCancelRemovesTheSubscriberAndClosesTheChannel(t *testing.T) {
-	broker := NewBroker()
+	broker := NewBroker(nil)
 
 	events, cancel := broker.Subscribe(1)
 	require.Equal(t, 1, broker.Subscribers(1))
@@ -71,7 +71,7 @@ func TestCancelRemovesTheSubscriberAndClosesTheChannel(t *testing.T) {
 }
 
 func TestCancelIsSafeToCallTwice(t *testing.T) {
-	broker := NewBroker()
+	broker := NewBroker(nil)
 
 	_, cancel := broker.Subscribe(1)
 	cancel()
@@ -80,7 +80,7 @@ func TestCancelIsSafeToCallTwice(t *testing.T) {
 }
 
 func TestPublishDropsInsteadOfBlockingASlowReader(t *testing.T) {
-	broker := NewBroker()
+	broker := NewBroker(nil)
 
 	_, cancel := broker.Subscribe(1)
 	defer cancel()
@@ -94,7 +94,7 @@ func TestPublishDropsInsteadOfBlockingASlowReader(t *testing.T) {
 }
 
 func TestPublishStaysSafeWhileSubscribersComeAndGo(t *testing.T) {
-	broker := NewBroker()
+	broker := NewBroker(nil)
 
 	var wg sync.WaitGroup
 	stop := make(chan struct{})
