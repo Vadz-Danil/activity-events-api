@@ -84,6 +84,7 @@ func registerAPI(engine *gin.Engine, d Deps) {
 	events.POST("", d.Events.Create)
 	events.POST("/batch", d.Events.CreateBatch)
 	events.GET("", d.Events.List)
+	events.GET("/stream", d.Events.Stream)
 
 	if d.Aggregation == nil {
 		return

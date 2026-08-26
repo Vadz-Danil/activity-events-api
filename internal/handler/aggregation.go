@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"strconv"
@@ -117,7 +118,7 @@ func (h *Aggregation) fail(c *gin.Context, err error) {
 
 	case errors.Is(err, service.ErrStatsRangeTooLarge):
 		response.Error(c, http.StatusBadRequest, response.CodeValidationFailed,
-			"The requested window is longer than 90 days")
+			fmt.Sprintf("The requested window is longer than %d days", int(service.MaxStatsRange.Hours()/24)))
 
 	default:
 		h.log.Error("unhandled aggregation error",

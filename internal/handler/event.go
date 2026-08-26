@@ -2,7 +2,10 @@ package handler
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"net/http"
 	"strconv"
 	"time"
@@ -16,7 +19,15 @@ import (
 	"github.com/Vadz-Danil/activity-events-api/internal/service"
 )
 
-const idempotencyHeader = "Idempotency-Key"
+const (
+	idempotencyHeader = "Idempotency-Key"
+
+	streamHeartbeat  = 20 * time.Second
+	streamMediaType  = "text/event-stream"
+	streamEventName  = "activity"
+	streamEventFrame = "id: %d\nevent: %s\ndata: %s\n\n"
+	streamKeepAlive  = ": keep-alive\n\n"
+)
 
 type EventService interface {
 	Record(ctx context.Context, userID int64, in service.EventInput) (*models.Event, bool, error)
@@ -24,13 +35,84 @@ type EventService interface {
 	List(ctx context.Context, q service.EventQuery) (*service.EventPage, error)
 }
 
+type EventStream interface {
+	Subscribe(userID int64) (<-chan models.Event, func())
+}
+
 type Event struct {
 	service EventService
+	stream  EventStream
 	log     *zap.Logger
 }
 
-func NewEvent(svc EventService, log *zap.Logger) *Event {
-	return &Event{service: svc, log: log}
+func NewEvent(svc EventService, stream EventStream, log *zap.Logger) *Event {
+	return &Event{service: svc, stream: stream, log: log}
+}
+
+func (h *Event) Stream(c *gin.Context) {
+	userID, ok := currentUser(c)
+	if !ok {
+		return
+	}
+
+	events, cancel := h.stream.Subscribe(userID)
+	defer cancel()
+
+	writer := http.NewResponseController(c.Writer)
+	if err := writer.SetWriteDeadline(time.Time{}); err != nil {
+		h.log.Debug("stream write deadline is left as configured", zap.Error(err))
+	}
+
+	c.Header("Content-Type", streamMediaType)
+	c.Header("Cache-Control", "no-cache")
+	c.Header("Connection", "keep-alive")
+	c.Header("X-Accel-Buffering", "no")
+	c.Status(http.StatusOK)
+	c.Writer.Flush()
+
+	heartbeat := time.NewTicker(streamHeartbeat)
+	defer heartbeat.Stop()
+
+	ctx := c.Request.Context()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+
+		case event, open := <-events:
+			if !open {
+				return
+			}
+
+			payload, err := json.Marshal(newEventResponse(event))
+			if err != nil {
+				h.log.Error("encode streamed event", zap.Int64("event_id", event.ID), zap.Error(err))
+				continue
+			}
+
+			if !h.write(c, fmt.Sprintf(streamEventFrame, event.ID, streamEventName, payload)) {
+				return
+			}
+
+		case <-heartbeat.C:
+			if !h.write(c, streamKeepAlive) {
+				return
+			}
+		}
+	}
+}
+
+func (h *Event) write(c *gin.Context, chunk string) bool {
+	if _, err := io.WriteString(c.Writer, chunk); err != nil {
+		h.log.Debug("stream closed by the client",
+			zap.String("request_id", middleware.RequestIDFrom(c)),
+			zap.Error(err),
+		)
+		return false
+	}
+
+	c.Writer.Flush()
+	return true
 }
 
 func (h *Event) Create(c *gin.Context) {

@@ -31,16 +31,22 @@ type EventRepository interface {
 	List(ctx context.Context, f repository.EventFilter) ([]models.Event, error)
 }
 
+type EventPublisher interface {
+	Publish(e models.Event)
+}
+
 type Event struct {
-	events EventRepository
-	log    *zap.Logger
-	now    func() time.Time
+	events    EventRepository
+	publisher EventPublisher
+	log       *zap.Logger
+	now       func() time.Time
 }
 
 type EventDeps struct {
-	Events EventRepository
-	Logger *zap.Logger
-	Now    func() time.Time
+	Events    EventRepository
+	Publisher EventPublisher
+	Logger    *zap.Logger
+	Now       func() time.Time
 }
 
 func NewEvent(d EventDeps) *Event {
@@ -53,7 +59,7 @@ func NewEvent(d EventDeps) *Event {
 		log = zap.NewNop()
 	}
 
-	return &Event{events: d.Events, log: log, now: now}
+	return &Event{events: d.Events, publisher: d.Publisher, log: log, now: now}
 }
 
 type EventInput struct {
@@ -88,7 +94,18 @@ func (s *Event) Record(ctx context.Context, userID int64, in EventInput) (*model
 		return nil, false, err
 	}
 
-	return s.events.Create(ctx, event)
+	stored, created, err := s.events.Create(ctx, event)
+	if err == nil && created {
+		s.publish(*stored)
+	}
+
+	return stored, created, err
+}
+
+func (s *Event) publish(e models.Event) {
+	if s.publisher != nil {
+		s.publisher.Publish(e)
+	}
 }
 
 func (s *Event) RecordBatch(ctx context.Context, userID int64, in []EventInput) (*BatchResult, error) {
@@ -121,6 +138,10 @@ func (s *Event) RecordBatch(ctx context.Context, userID int64, in []EventInput) 
 	created, duplicates, err := s.events.CreateBatch(ctx, events)
 	if err != nil {
 		return nil, err
+	}
+
+	for _, e := range created {
+		s.publish(e)
 	}
 
 	return &BatchResult{Created: created, Duplicates: duplicates}, nil

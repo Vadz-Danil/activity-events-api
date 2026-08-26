@@ -83,8 +83,8 @@ func newEventResponse(e models.Event) eventResponse {
 		ID:             e.ID,
 		Type:           e.Type,
 		Payload:        e.Payload,
-		OccurredAt:     e.OccurredAt,
-		CreatedAt:      e.CreatedAt,
+		OccurredAt:     e.OccurredAt.UTC(),
+		CreatedAt:      e.CreatedAt.UTC(),
 		IdempotencyKey: e.IdempotencyKey,
 	}
 }

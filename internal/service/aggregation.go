@@ -13,9 +13,11 @@ import (
 )
 
 const (
-	DefaultRunsLimit = 20
-	MaxRunsLimit     = 100
-	MaxStatsRange    = 90 * 24 * time.Hour
+	DefaultRunsLimit   = 20
+	MaxRunsLimit       = 100
+	MaxStatsRange      = 90 * 24 * time.Hour
+	defaultBackfill    = 12
+	defaultStatsWindow = 7 * 24 * time.Hour
 )
 
 type AggregationRepository interface {
@@ -59,7 +61,7 @@ func NewAggregation(d AggregationDeps) *Aggregation {
 	}
 	backfill := d.Backfill
 	if backfill <= 0 {
-		backfill = 12
+		backfill = defaultBackfill
 	}
 
 	return &Aggregation{repo: d.Repo, log: log, now: now, bucket: bucket, backfill: backfill}
@@ -196,7 +198,7 @@ func (s *Aggregation) Stats(ctx context.Context, q StatsQuery) (*Stats, error) {
 	}
 	from := q.From.UTC()
 	if from.IsZero() {
-		from = to.Add(-7 * 24 * time.Hour)
+		from = to.Add(-defaultStatsWindow)
 	}
 
 	if !from.Before(to) {

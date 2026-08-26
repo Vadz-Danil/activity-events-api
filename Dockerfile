@@ -19,6 +19,10 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
     CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/migrate ./cmd/migrate
 
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/seed ./cmd/seed
+
 FROM alpine:3.22
 
 WORKDIR /app
@@ -28,6 +32,7 @@ RUN apk add --no-cache ca-certificates tzdata wget \
 
 COPY --from=builder /out/app /usr/local/bin/app
 COPY --from=builder /out/migrate /usr/local/bin/migrate
+COPY --from=builder /out/seed /usr/local/bin/seed
 COPY migrations /app/migrations
 
 ENV MIGRATIONS_DIR=/app/migrations

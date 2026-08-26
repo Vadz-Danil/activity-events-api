@@ -13,6 +13,7 @@ import (
 	"github.com/Vadz-Danil/activity-events-api/internal/router"
 	"github.com/Vadz-Danil/activity-events-api/internal/scheduler"
 	"github.com/Vadz-Danil/activity-events-api/internal/service"
+	"github.com/Vadz-Danil/activity-events-api/internal/stream"
 )
 
 func BuildDeps(cfg *config.Config, pool *pgxpool.Pool, m *metrics.Metrics, log *zap.Logger, version string) (router.Deps, *scheduler.Scheduler, error) {
@@ -91,13 +92,16 @@ func wireAPI(deps *router.Deps, cfg *config.Config, pool *pgxpool.Pool, log *zap
 		return err
 	}
 
+	broker := stream.NewBroker()
+
 	eventService := service.NewEvent(service.EventDeps{
-		Events: repository.NewEventRepository(pool),
-		Logger: log,
+		Events:    repository.NewEventRepository(pool),
+		Publisher: broker,
+		Logger:    log,
 	})
 
 	deps.Auth = handler.NewAuth(authService, log, cfg.App.FrontendURL)
-	deps.Events = handler.NewEvent(eventService, log)
+	deps.Events = handler.NewEvent(eventService, broker, log)
 	deps.Aggregation = handler.NewAggregation(aggregation, log)
 	deps.Guard = middleware.NewGuard(jwtManager)
 

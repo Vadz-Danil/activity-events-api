@@ -99,7 +99,15 @@ func (g Google) CodeFlowEnabled() bool {
 	return g.Enabled() && g.ClientSecret != "" && g.RedirectURL != ""
 }
 
-const defaultMinJWTSecretLen = 32
+const day = 24 * time.Hour
+
+const (
+	defaultMinJWTSecretLen = 32
+
+	defaultAggregationBucket   = 4 * time.Hour
+	defaultAggregationTick     = 5 * time.Minute
+	defaultAggregationBackfill = 12
+)
 
 type Migrations struct {
 	Log Log
@@ -140,13 +148,13 @@ func Load() (*Config, error) {
 			MinSecretLen: envInt("JWT_SECRET_MIN_LEN", defaultMinJWTSecretLen),
 			Issuer:       env("JWT_ISSUER", "activity-events-api"),
 			AccessTTL:    envDuration("JWT_ACCESS_TTL", 15*time.Minute),
-			RefreshTTL:   envDuration("JWT_REFRESH_TTL", 30*24*time.Hour),
+			RefreshTTL:   envDuration("JWT_REFRESH_TTL", 30*day),
 			BcryptCost:   envInt("BCRYPT_COST", 12),
 		},
 		Aggregation: Aggregation{
-			Bucket:   envDuration("AGGREGATION_BUCKET", 4*time.Hour),
-			Tick:     envDuration("AGGREGATION_TICK", 5*time.Minute),
-			Backfill: envInt("AGGREGATION_BACKFILL", 12),
+			Bucket:   envDuration("AGGREGATION_BUCKET", defaultAggregationBucket),
+			Tick:     envDuration("AGGREGATION_TICK", defaultAggregationTick),
+			Backfill: envInt("AGGREGATION_BACKFILL", defaultAggregationBackfill),
 		},
 		Google: Google{
 			ClientID:     env("GOOGLE_CLIENT_ID", ""),
@@ -184,8 +192,8 @@ func (c *Config) validate() error {
 	switch {
 	case c.Aggregation.Bucket <= 0:
 		return fmt.Errorf("config: AGGREGATION_BUCKET must be positive")
-	case 24*time.Hour%c.Aggregation.Bucket != 0:
-		return fmt.Errorf("config: AGGREGATION_BUCKET (%s) must divide 24h evenly", c.Aggregation.Bucket)
+	case day%c.Aggregation.Bucket != 0:
+		return fmt.Errorf("config: AGGREGATION_BUCKET (%s) must divide %s evenly", c.Aggregation.Bucket, day)
 	case c.Aggregation.Tick <= 0:
 		return fmt.Errorf("config: AGGREGATION_TICK must be positive")
 	case c.Aggregation.Backfill <= 0:
