@@ -73,11 +73,11 @@ Northflank as environment variables. Pull requests from forks do not receive sec
 
 ### 2. GHCR
 
-The first push to `main` publishes `ghcr.io/<owner>/activity-events-api`. Open **Profile → Packages →
-activity-events-api → Package settings** and switch the visibility to **public** — Northflank then pulls it without
-registry credentials. To keep the package private instead, add a Northflank registry credential backed by a GitHub token
-with `read:packages` and pass its id as
-`credentials-id` to the deploy action.
+The first push to `main` publishes `ghcr.io/<owner>/activity-events-api`. A package published from a public repository
+is public as well, so Northflank pulls it without registry credentials — confirm with
+`gh api user/packages/container/activity-events-api -q .visibility`. If the package is ever made private, add a
+Northflank registry credential backed by a GitHub token with `read:packages` and pass its id as `credentials-id` to the
+deploy action.
 
 ### 3. Northflank
 
@@ -121,7 +121,10 @@ LOG_FORMAT=json
 `DB_MIN_CONNS=0` matters: a pool that keeps idle connections open prevents Neon from suspending and burns the monthly
 compute allowance.
 
-Health checks: `/healthz` for liveness, `/readyz` for readiness.
+Point both the liveness and the readiness probe at `/healthz`. `/readyz` pings the database, and a probe running every
+few seconds would keep Neon awake around the clock — roughly 180 CU-hours a month against a free allowance of 100. A
+restart cannot fix a database outage anyway, so probing the process is what the platform actually needs; `/readyz`
+stays for manual checks and for the local compose stack, where Postgres is always up.
 
 Finally create an API key with the *Update deployment* permission and copy the project and service ids into the
 repository variables.
