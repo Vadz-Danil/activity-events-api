@@ -59,14 +59,8 @@ func (r *RefreshTokenRepository) Rotate(ctx context.Context, oldID uuid.UUID, ne
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	const lock = `SELECT 1 FROM refresh_tokens WHERE id = $1 AND revoked_at IS NULL FOR UPDATE`
-
-	var locked int
-	switch err := tx.QueryRow(ctx, lock, oldID).Scan(&locked); {
-	case errors.Is(err, pgx.ErrNoRows):
-		return ErrTokenAlreadyRotated
-	case err != nil:
-		return fmt.Errorf("repository: lock rotated token: %w", err)
+	if err := lockFamily(ctx, tx, next.FamilyID); err != nil {
+		return err
 	}
 
 	if err := insertRefreshToken(ctx, tx, next); err != nil {

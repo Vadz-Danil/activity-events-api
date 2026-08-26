@@ -10,7 +10,7 @@ export
 endif
 
 .PHONY: help up infra dev down clean logs ps psql build test tidy \
-        migrate-up migrate-down migrate-up-to migrate-down-to migrate-redo migrate-status migrate-create
+        test-integration migrate-up migrate-down migrate-up-to migrate-down-to migrate-redo migrate-status migrate-create
 
 help:
 	@echo "  up              start the whole stack"
@@ -32,6 +32,7 @@ help:
 	@echo ""
 	@echo "  build           build binaries locally"
 	@echo "  test            run tests"
+	@echo "  test-integration  repository tests against the running database"
 	@echo "  tidy            tidy dependencies"
 
 up:
@@ -88,6 +89,9 @@ build:
 
 test:
 	go test ./... -race -cover
+
+test-integration:
+	go test ./internal/repository/... -tags integration -count=1
 
 tidy:
 	go mod tidy

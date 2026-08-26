@@ -1,0 +1,10 @@
+# Deployed hosts scraped by the local Prometheus over HTTPS.
+# Uncomment and fill in once the services are up on Northflank:
+#
+# - targets: ["<api-host>:443"]
+#   labels:
+#     component: api
+# - targets: ["<worker-host>:443"]
+#   labels:
+#     component: worker
+[]

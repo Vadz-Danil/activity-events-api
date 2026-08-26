@@ -17,6 +17,12 @@ scrape_configs:
         labels:
           component: worker
 
+  - job_name: activity-production
+    metrics_path: /metrics
+    scheme: https
+    file_sd_configs:
+      - files: ["/etc/prometheus/targets/*.yml"]
+
   - job_name: prometheus
     static_configs:
       - targets: ["localhost:9090"]
