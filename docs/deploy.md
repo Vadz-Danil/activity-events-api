@@ -151,6 +151,15 @@ Neon → Pages project (gives `https://<project>.pages.dev` for `FRONTEND_URL` a
 `CORS_ALLOWED_ORIGINS`) → Northflank services (give the API host for
 `VITE_API_URL` and `GOOGLE_REDIRECT_URL`) → repository secrets and variables.
 
+## Demo data
+
+`make seed` creates a demo account and fills a week of events shaped like a working day, then aggregates those windows
+so the dashboard has something to draw. The account defaults to `demo@example.com` with the password
+`demo-password-123` and the `admin` role; override them with `SEED_EMAIL`, `SEED_PASSWORD` and `SEED_ROLE`.
+
+These credentials are documented here rather than shown on the sign-in screen: the repository is public, and a
+pre-filled password on a login form is an invitation.
+
 ## Local monitoring
 
 Prometheus and Grafana stay in `docker-compose.yaml` and are started with

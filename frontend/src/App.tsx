@@ -1,6 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
-import { exchangeGoogleCode, googleSignInURL, signOut, type Session } from './api'
+import { exchangeGoogleCode, refreshSession, signOut, type Session } from './api'
+import { Dashboard } from './Dashboard'
+import { SignIn } from './SignIn'
 import { clearSession, loadSession, saveSession } from './session'
 
 const callbackPath = '/auth/callback'
@@ -11,6 +13,18 @@ export default function App() {
   const [session, setSession] = useState<Session | null>(() => loadSession())
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(window.location.pathname === callbackPath)
+
+  const refreshing = useRef<Promise<void> | null>(null)
+
+  const accept = useCallback((next: Session) => {
+    saveSession(next)
+    setSession(next)
+  }, [])
+
+  const drop = useCallback(() => {
+    clearSession()
+    setSession(null)
+  }, [])
 
   useEffect(() => {
     if (window.location.pathname !== callbackPath || exchangeStarted) {
@@ -24,59 +38,55 @@ export default function App() {
     const back = params.get('redirect_to') ?? '/'
 
     if (failure || !code) {
-      setError(failure ?? 'Sign-in was interrupted')
+      setError(failure ?? 'Вхід через Google перервано')
       setBusy(false)
       window.history.replaceState({}, '', '/')
       return
     }
 
     exchangeGoogleCode(code)
-      .then((next) => {
-        saveSession(next)
-        setSession(next)
-      })
+      .then(accept)
       .catch((err: Error) => setError(err.message))
       .finally(() => {
         setBusy(false)
         window.history.replaceState({}, '', back)
       })
-  }, [])
+  }, [accept])
 
-  const handleSignOut = () => {
+  const renew = useCallback(() => {
+    if (!session) {
+      return
+    }
+
+    if (!refreshing.current) {
+      refreshing.current = refreshSession(session.refresh_token)
+        .then(accept)
+        .catch(drop)
+        .finally(() => {
+          refreshing.current = null
+        })
+    }
+  }, [session, accept, drop])
+
+  const leave = useCallback(() => {
     if (session) {
       void signOut(session.refresh_token)
     }
-    clearSession()
-    setSession(null)
+    drop()
+  }, [session, drop])
+
+  if (busy) {
+    return (
+      <main className="page">
+        <h1>Activity Events</h1>
+        <p className="muted">Завершуємо вхід через Google…</p>
+      </main>
+    )
   }
 
-  return (
-    <main className="page">
-      <h1>Activity Events</h1>
+  if (!session) {
+    return <SignIn onSignedIn={accept} notice={error} />
+  }
 
-      {busy && <p className="muted">Finishing sign-in…</p>}
-
-      {error && <p className="error">Sign-in failed: {error}</p>}
-
-      {session ? (
-        <section className="card">
-          <p className="muted">
-            Signed in as <strong>{session.user.email}</strong> ({session.user.role})
-          </p>
-          <button type="button" onClick={handleSignOut}>
-            Sign out
-          </button>
-        </section>
-      ) : (
-        !busy && (
-          <section className="card">
-            <p className="muted">Sign in to send and browse activity events.</p>
-            <a className="button" href={googleSignInURL('/')}>
-              Continue with Google
-            </a>
-          </section>
-        )
-      )}
-    </main>
-  )
+  return <Dashboard session={session} onSignOut={leave} onUnauthorized={renew} />
 }

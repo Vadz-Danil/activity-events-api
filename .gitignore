@@ -20,3 +20,5 @@ yarn-error.log*
 *.iml
 
 .DS_Store
+
+frontend/e2e/*.png
