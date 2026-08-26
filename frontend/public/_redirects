@@ -1,1 +1,6 @@
+# Google will not accept a redirect URI on code.run: that domain belongs to
+# Northflank, not to us. pages.dev is a public suffix, so this host counts as our
+# own domain — Google accepts it, and the hop below hands the code to the API.
+/api/v1/auth/google/callback  https://api--activity-events--4jynm8rb8gw5.code.run/api/v1/auth/google/callback  302
+
 /*  /index.html  200

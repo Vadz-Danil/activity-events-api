@@ -30,10 +30,17 @@ type Auth struct {
 	service     AuthService
 	log         *zap.Logger
 	frontendURL string
+	google      bool
 }
 
-func NewAuth(svc AuthService, log *zap.Logger, frontendURL string) *Auth {
-	return &Auth{service: svc, log: log, frontendURL: frontendURL}
+func NewAuth(svc AuthService, log *zap.Logger, frontendURL string, google bool) *Auth {
+	return &Auth{service: svc, log: log, frontendURL: frontendURL, google: google}
+}
+
+// Methods lets the client find out which sign-in options this deployment actually
+// has, so it never offers a button that can only fail.
+func (h *Auth) Methods(c *gin.Context) {
+	c.JSON(http.StatusOK, methodsResponse{Password: true, Google: h.google})
 }
 
 func (h *Auth) Register(c *gin.Context) {

@@ -107,6 +107,11 @@ func newBatchResponse(result *service.BatchResult) batchResponse {
 	return batchResponse{Created: created, CreatedCount: len(created), Duplicates: result.Duplicates}
 }
 
+type methodsResponse struct {
+	Password bool `json:"password"`
+	Google   bool `json:"google"`
+}
+
 type sessionResponse struct {
 	AccessToken  string       `json:"access_token"`
 	RefreshToken string       `json:"refresh_token"`

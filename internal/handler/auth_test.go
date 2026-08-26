@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -55,7 +56,7 @@ func authEngine(t *testing.T) (*gin.Engine, *fakeAuthService) {
 	gin.SetMode(gin.TestMode)
 
 	svc := &fakeAuthService{}
-	h := NewAuth(svc, zap.NewNop(), testFrontendURL)
+	h := NewAuth(svc, zap.NewNop(), testFrontendURL, false)
 
 	engine := gin.New()
 	engine.POST("/register", h.Register)
@@ -129,4 +130,44 @@ func (f *fakeAuthService) Logout(context.Context, string) error { return nil }
 
 func (f *fakeAuthService) User(context.Context, int64) (*models.User, error) {
 	return &models.User{ID: 1, Email: "user@example.com", Role: models.RoleUser}, nil
+}
+
+func methodsEngine(t *testing.T, google bool) *gin.Engine {
+	t.Helper()
+	gin.SetMode(gin.TestMode)
+
+	engine := gin.New()
+	engine.GET("/methods", NewAuth(&fakeAuthService{}, zap.NewNop(), testFrontendURL, google).Methods)
+
+	return engine
+}
+
+func TestMethodsReportsGoogleOnlyWhenItIsConfigured(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		google bool
+	}{
+		{"configured", true},
+		{"not configured", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			methodsEngine(t, tc.google).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/methods", nil))
+
+			if rec.Code != http.StatusOK {
+				t.Fatalf("status: got %d, want %d", rec.Code, http.StatusOK)
+			}
+
+			var body methodsResponse
+			if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+				t.Fatalf("decode body: %v", err)
+			}
+			if body.Google != tc.google {
+				t.Errorf("google: got %v, want %v", body.Google, tc.google)
+			}
+			if !body.Password {
+				t.Error("password sign-in must always be reported as available")
+			}
+		})
+	}
 }

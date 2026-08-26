@@ -102,7 +102,7 @@ func wireAPI(deps *router.Deps, cfg *config.Config, pool *pgxpool.Pool, m *metri
 		Logger:    log,
 	})
 
-	deps.Auth = handler.NewAuth(authService, log, cfg.App.FrontendURL)
+	deps.Auth = handler.NewAuth(authService, log, cfg.App.FrontendURL, cfg.Google.CodeFlowEnabled())
 	deps.Events = handler.NewEvent(eventService, broker, log)
 	deps.Aggregation = handler.NewAggregation(aggregation, log)
 	deps.Guard = middleware.NewGuard(jwtManager)

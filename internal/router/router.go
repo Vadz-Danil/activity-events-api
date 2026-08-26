@@ -67,6 +67,7 @@ func registerAPI(engine *gin.Engine, d Deps) {
 	}
 
 	authRoutes := v1.Group("/auth")
+	authRoutes.GET("/methods", d.Auth.Methods)
 	authRoutes.POST("/register", d.Auth.Register)
 	authRoutes.POST("/login", d.Auth.Login)
 	authRoutes.GET("/google/start", d.Auth.GoogleStart)

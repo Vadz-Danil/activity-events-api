@@ -1,6 +1,6 @@
-import { useState, type SyntheticEvent } from 'react'
+import { useEffect, useState, type SyntheticEvent } from 'react'
 
-import { ApiError, googleSignInURL, signIn, signUp, type Session } from './api'
+import { ApiError, getAuthMethods, googleSignInURL, signIn, signUp, type AuthMethods, type Session } from './api'
 import { ThemeToggle } from './ThemeToggle'
 
 type Mode = 'sign-in' | 'sign-up'
@@ -23,6 +23,15 @@ export function SignIn({
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [methods, setMethods] = useState<AuthMethods | null>(null)
+
+  // The server decides which options exist: offering a Google button on a
+  // deployment without Google credentials only produces a dead end.
+  useEffect(() => {
+    getAuthMethods()
+      .then(setMethods)
+      .catch(() => setMethods({ password: true, google: false }))
+  }, [])
 
   async function submit(e: SyntheticEvent) {
     e.preventDefault()
@@ -106,14 +115,18 @@ export function SignIn({
 
         {(error ?? notice) && <p className="error">{error ?? notice}</p>}
 
-        <p className="divider" aria-hidden="true">
-          <span>або</span>
-        </p>
+        {methods?.google && (
+          <>
+            <p className="divider" aria-hidden="true">
+              <span>або</span>
+            </p>
 
-        <a className="google" href={googleSignInURL('/')}>
-          <GoogleMark />
-          Продовжити з Google
-        </a>
+            <a className="google" href={googleSignInURL('/')}>
+              <GoogleMark />
+              Продовжити з Google
+            </a>
+          </>
+        )}
       </form>
     </main>
   )

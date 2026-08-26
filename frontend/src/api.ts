@@ -260,3 +260,12 @@ export function triggerRun(token: string, bucketStart?: string): Promise<Aggrega
     body: JSON.stringify(bucketStart ? { bucket_start: bucketStart } : {}),
   })
 }
+
+export type AuthMethods = {
+  password: boolean
+  google: boolean
+}
+
+export function getAuthMethods(): Promise<AuthMethods> {
+  return call<AuthMethods>('/api/v1/auth/methods')
+}

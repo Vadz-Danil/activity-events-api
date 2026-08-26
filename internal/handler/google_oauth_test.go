@@ -102,7 +102,7 @@ func oauthEngine(t *testing.T) (*gin.Engine, *fakeAuthService) {
 	gin.SetMode(gin.TestMode)
 
 	svc := &fakeAuthService{}
-	h := NewAuth(svc, zap.NewNop(), testFrontendURL)
+	h := NewAuth(svc, zap.NewNop(), testFrontendURL, false)
 
 	engine := gin.New()
 	engine.GET("/google/start", h.GoogleStart)

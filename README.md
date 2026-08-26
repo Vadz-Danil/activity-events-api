@@ -60,6 +60,7 @@ Local demo account: `demo@example.com` / `demo-password-123`.
 
 | Method and path | Access | What it does |
 | --- | --- | --- |
+| `GET /api/v1/auth/methods` | open | Which sign-in options this deployment has |
 | `POST /api/v1/auth/register` · `/login` | open | Password sign-up and sign-in |
 | `GET /api/v1/auth/google/start` · `/callback` · `POST /exchange` | open | Google authorization-code flow with PKCE |
 | `POST /api/v1/auth/refresh` · `/logout` | open | Rotation and revocation |
@@ -71,6 +72,10 @@ Local demo account: `demo@example.com` / `demo-password-123`.
 | `POST /api/v1/admin/aggregation/runs` | admin | Recompute one window |
 | `GET /api/v1/admin/aggregation/runs` | admin | Run history |
 | `GET /healthz` · `/readyz` · `/metrics` | open | Operations |
+
+Google sign-in is optional: without `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` and
+`GOOGLE_REDIRECT_URL` the API reports `google: false` from `/auth/methods` and the SPA leaves the
+button out, rather than offering one that can only fail.
 
 **`admin` is not a superuser over data.** Feeds and statistics are always filtered by the `user_id`
 in the token, and no endpoint exposes another account's events. The role only grants control over
