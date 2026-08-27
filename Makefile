@@ -14,7 +14,7 @@ endif
 
 help:
 	@echo "  up              start the whole stack"
-	@echo "  infra           database and monitoring only"
+	@echo "  infra           database and monitoring only (prometheus, grafana, loki)"
 	@echo "  dev             stack with the frontend in vite dev mode (HMR)"
 	@echo "  down            stop the stack"
 	@echo "  clean           stop and drop data volumes"
@@ -40,7 +40,7 @@ up:
 	$(COMPOSE) up -d --build
 
 infra:
-	$(COMPOSE) up -d postgres prometheus grafana
+	$(COMPOSE) up -d postgres prometheus grafana loki alloy
 
 dev:
 	$(COMPOSE_DEV) up --build
