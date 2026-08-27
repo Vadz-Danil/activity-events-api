@@ -1002,6 +1002,37 @@ button.primary:disabled {
   }
 }
 
+@media (max-width: 560px) {
+  .masthead {
+    flex-wrap: wrap;
+    align-items: flex-start;
+  }
+
+  .masthead-tools {
+    flex-wrap: wrap;
+    width: 100%;
+  }
+
+  .scope,
+  .scope-manual {
+    flex-wrap: wrap;
+  }
+
+  .scope .field,
+  .scope select {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .composer {
+    flex-wrap: wrap;
+  }
+
+  .composer .field {
+    flex-basis: 100%;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   .status-live .dot {
