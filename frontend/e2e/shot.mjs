@@ -10,7 +10,12 @@ const page = await browser.newPage({ viewport: { width: 1280, height: 900 }, dev
 
 const problems = []
 page.on('console', (m) => m.type() === 'error' && problems.push(`console: ${m.text()}`))
-page.on('requestfailed', (r) => problems.push(`request failed: ${r.method()} ${r.url()} — ${r.failure()?.errorText}`))
+page.on('requestfailed', (r) => {
+  const deliberate = r.url().includes('/events/stream') && r.failure()?.errorText === 'net::ERR_ABORTED'
+  if (!deliberate) {
+    problems.push(`request failed: ${r.method()} ${r.url()} — ${r.failure()?.errorText}`)
+  }
+})
 page.on('response', (r) => r.status() >= 400 && problems.push(`http ${r.status()}: ${r.request().method()} ${r.url()}`))
 
 await page.goto(APP, { waitUntil: 'networkidle' })
@@ -24,6 +29,21 @@ await page.waitForSelector('.tiles', { timeout: 15000 })
 await page.mouse.move(0, 0)
 await page.waitForTimeout(1200)
 await page.screenshot({ path: `${OUT}/02-dashboard.png`, fullPage: true })
+
+if (process.env.SCOPE_ID) {
+  await page.fill('.scope-manual input', process.env.SCOPE_ID)
+  await page.click('.scope-manual button[type="submit"]')
+  await page.waitForFunction(
+    (id) => document.querySelector('.scope select')?.id === id,
+    process.env.SCOPE_ID,
+    { timeout: 10000 },
+  )
+  await page.waitForTimeout(1200)
+  await page.screenshot({ path: `${OUT}/05-scope.png`, fullPage: true })
+
+  await page.click('.scope button[type="button"]')
+  await page.waitForTimeout(900)
+}
 
 await page.click('.theme-toggle button:nth-child(2)')
 await page.waitForTimeout(500)

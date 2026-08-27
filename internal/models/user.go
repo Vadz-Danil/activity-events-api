@@ -28,6 +28,14 @@ type User struct {
 	UpdatedAt     time.Time
 }
 
+type UserSummary struct {
+	ID          int64
+	Email       string
+	Role        Role
+	EventCount  int64
+	LastEventAt *time.Time
+}
+
 func (u *User) HasPassword() bool { return u.PasswordHash != nil && *u.PasswordHash != "" }
 
 func (u *User) HasGoogle() bool { return u.GoogleSub != nil && *u.GoogleSub != "" }

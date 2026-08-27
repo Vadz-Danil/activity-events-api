@@ -95,6 +95,7 @@ func registerAPI(engine *gin.Engine, d Deps) {
 	stats.GET("/activity", d.Aggregation.Stats)
 
 	admin := v1.Group("/admin", d.Guard.RequireAuth(), d.Guard.RequireRole(models.RoleAdmin))
+	admin.GET("/users", d.Auth.Accounts)
 	admin.POST("/aggregation/runs", d.Aggregation.Trigger)
 	admin.GET("/aggregation/runs", d.Aggregation.Runs)
 }

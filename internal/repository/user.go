@@ -54,6 +54,40 @@ func (r *UserRepository) ByEmail(ctx context.Context, email string) (*models.Use
 	return scanUser(r.pool.QueryRow(ctx, q, email))
 }
 
+func (r *UserRepository) List(ctx context.Context, limit int) ([]models.UserSummary, error) {
+	const q = `
+		SELECT u.id,
+		       u.email,
+		       u.role,
+		       coalesce(sum(b.event_count), 0)::bigint AS event_count,
+		       max(b.last_event_at)                    AS last_event_at
+		FROM users u
+		LEFT JOIN activity_buckets b ON b.user_id = u.id
+		GROUP BY u.id, u.email, u.role
+		ORDER BY event_count DESC, u.id
+		LIMIT $1`
+
+	rows, err := r.pool.Query(ctx, q, limit)
+	if err != nil {
+		return nil, fmt.Errorf("repository: list users: %w", err)
+	}
+	defer rows.Close()
+
+	users := make([]models.UserSummary, 0, limit)
+	for rows.Next() {
+		var u models.UserSummary
+		if err := rows.Scan(&u.ID, &u.Email, &u.Role, &u.EventCount, &u.LastEventAt); err != nil {
+			return nil, fmt.Errorf("repository: scan user summary: %w", err)
+		}
+		users = append(users, u)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("repository: read users: %w", err)
+	}
+
+	return users, nil
+}
+
 func (r *UserRepository) ByGoogleSub(ctx context.Context, sub string) (*models.User, error) {
 	const q = `
 		SELECT id, email, password_hash, role, google_sub, name, email_verified, created_at, updated_at

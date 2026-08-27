@@ -5,28 +5,32 @@ import { ApiError, createEvent, listEvents, streamEvents, type ActivityEvent } f
 const feedLimit = 50
 const reconnectDelay = 3000
 
-type Connection = 'connecting' | 'live' | 'offline'
+type Connection = 'connecting' | 'live' | 'offline' | 'history'
 
 const connectionClasses: Record<Connection, string> = {
   connecting: 'status-connecting',
   live: 'status-live',
   offline: 'status-offline',
+  history: 'status-history',
 }
 
 const connectionLabels: Record<Connection, string> = {
   connecting: 'під’єднання',
   live: 'на зв’язку',
   offline: 'нема зв’язку',
+  history: 'лише історія',
 }
 
 export function LiveFeed({
   token,
   onUnauthorized,
   onCreated,
+  userId,
 }: {
   token: string
   onUnauthorized: () => void
   onCreated: () => void
+  userId?: number
 }) {
   const [events, setEvents] = useState<ActivityEvent[]>([])
   const [connection, setConnection] = useState<Connection>('connecting')
@@ -52,14 +56,19 @@ export function LiveFeed({
     }
 
     async function connect() {
-      setConnection('connecting')
+      setConnection(userId ? 'history' : 'connecting')
 
       try {
-        const page = await listEvents(token, { limit: 20 })
+        const page = await listEvents(token, { limit: 20, userId })
         if (cancelled) {
           return
         }
         setEvents(page.items)
+
+        if (userId) {
+          setConnection('history')
+          return
+        }
         setConnection('live')
 
         await streamEvents(token, add, controller.signal)
@@ -88,7 +97,7 @@ export function LiveFeed({
       controller.abort()
       clearTimeout(retry)
     }
-  }, [token])
+  }, [token, userId])
 
   async function send(e: SyntheticEvent) {
     e.preventDefault()
@@ -115,21 +124,24 @@ export function LiveFeed({
         </span>
       </header>
 
-      <form className="composer" onSubmit={send}>
-        <label className="field">
-          <span className="sr-only">Тип події</span>
-          <input value={type} onChange={(e) => setType(e.target.value)} required />
-        </label>
-        <button type="submit" className="primary" disabled={sending}>
-          {sending ? 'Надсилаю…' : 'Надіслати подію'}
-        </button>
-      </form>
+      {!userId && (
+        <form className="composer" onSubmit={send}>
+          <label className="field">
+            <span className="sr-only">Тип події</span>
+            <input value={type} onChange={(e) => setType(e.target.value)} required />
+          </label>
+          <button type="submit" className="primary" disabled={sending}>
+            {sending ? 'Надсилаю…' : 'Надіслати подію'}
+          </button>
+        </form>
+      )}
 
       {error && <p className="error">{error}</p>}
 
       <p className="muted hint">
-        Надіслана подія повертається сюди через SSE, а не додається локально — тобто список показує те, що справді
-        дійшло до сервера. Час у UTC.
+        {userId
+          ? 'Останні 20 подій цього користувача. Живий стрім доступний лише для власного акаунта — читати чужу активність у реальному часі це вже спостереження, а не звітність. Час у UTC.'
+          : 'Надіслана подія повертається сюди через SSE, а не додається локально — тобто список показує те, що справді дійшло до сервера. Час у UTC.'}
       </p>
 
       <ol className="feed">
@@ -141,7 +153,9 @@ export function LiveFeed({
         ))}
       </ol>
 
-      {events.length === 0 && <p className="muted">Подій ще немає. Надішли першу.</p>}
+      {events.length === 0 && (
+        <p className="muted">{userId ? 'У цього користувача подій немає.' : 'Подій ще немає. Надішли першу.'}</p>
+      )}
     </section>
   )
 }

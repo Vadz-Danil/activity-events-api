@@ -33,11 +33,16 @@ Usage:
 
 Environment:
   DATABASE_URL     connection string (required)
-  SEED_EMAIL       demo account, defaults to demo@example.com
-  SEED_PASSWORD    demo password, defaults to demo-password-123
-  SEED_ROLE        user or admin, defaults to admin
-  SEED_DAYS        how many days back to fill, defaults to 7
-  SEED_EVENTS      how many events to generate, defaults to 600
+  SEED_EMAIL              admin account, defaults to demo@example.com
+  SEED_PASSWORD           admin password, defaults to demo-password-123
+  SEED_ROLE               user or admin, defaults to admin
+  SEED_VIEWER_EMAIL       second account, defaults to viewer@example.com
+  SEED_VIEWER_PASSWORD    second password, defaults to viewer-password-123
+  SEED_DAYS               how many days back to fill, defaults to 7
+  SEED_EVENTS             how many events to generate, defaults to 600
+
+Two accounts are created on purpose: the admin one to demonstrate ?user_id= and
+the aggregation panel, the plain one to show what a regular user is limited to.
 `
 
 const (
@@ -48,6 +53,8 @@ const (
 
 	defaultDays   = 7
 	defaultEvents = 600
+
+	viewerEventsDivisor = 3
 
 	minUploadKB = 50
 	maxUploadKB = 4000
@@ -102,64 +109,98 @@ func run() error {
 	}
 	defer pool.Close()
 
-	user, err := demoUser(ctx, pool, log)
+	role := models.Role(env("SEED_ROLE", string(models.RoleAdmin)))
+	if !role.Valid() {
+		return fmt.Errorf("seed: SEED_ROLE %q must be user or admin", role)
+	}
+
+	admin, err := demoUser(ctx, pool, log, account{
+		email:    env("SEED_EMAIL", "demo@example.com"),
+		password: env("SEED_PASSWORD", "demo-password-123"),
+		role:     role,
+	})
 	if err != nil {
 		return err
 	}
 
-	created, err := fill(ctx, pool, user.ID, envInt("SEED_DAYS", defaultDays), envInt("SEED_EVENTS", defaultEvents))
+	viewer, err := demoUser(ctx, pool, log, account{
+		email:    env("SEED_VIEWER_EMAIL", "viewer@example.com"),
+		password: env("SEED_VIEWER_PASSWORD", "viewer-password-123"),
+		role:     models.RoleUser,
+	})
 	if err != nil {
 		return err
 	}
-	log.Info("events generated", zap.Int("created", created))
 
-	buckets, err := aggregate(ctx, pool, log, envInt("SEED_DAYS", defaultDays))
+	days, total := envInt("SEED_DAYS", defaultDays), envInt("SEED_EVENTS", defaultEvents)
+
+	for _, seeded := range []struct {
+		user  *models.User
+		count int
+	}{
+		{admin, total},
+		{viewer, total / viewerEventsDivisor},
+	} {
+		created, err := fill(ctx, pool, seeded.user.ID, days, seeded.count)
+		if err != nil {
+			return err
+		}
+		log.Info("events generated",
+			zap.String("email", seeded.user.Email),
+			zap.Int("created", created),
+		)
+	}
+
+	buckets, err := aggregate(ctx, pool, log, days)
 	if err != nil {
 		return err
 	}
 
 	log.Info("demo data is ready",
-		zap.String("email", user.Email),
-		zap.String("role", string(user.Role)),
+		zap.String("admin", admin.Email),
+		zap.String("viewer", viewer.Email),
 		zap.Int("buckets_aggregated", buckets),
 	)
 	return nil
 }
 
-func demoUser(ctx context.Context, pool *pgxpool.Pool, log *zap.Logger) (*models.User, error) {
-	email := env("SEED_EMAIL", "demo@example.com")
+type account struct {
+	email    string
+	password string
+	role     models.Role
+}
+
+func demoUser(ctx context.Context, pool *pgxpool.Pool, log *zap.Logger, spec account) (*models.User, error) {
 	users := repository.NewUserRepository(pool)
 
-	existing, err := users.ByEmail(ctx, email)
+	existing, err := users.ByEmail(ctx, spec.email)
 	switch {
 	case err == nil:
-		log.Info("reusing the demo account", zap.String("email", email))
+		log.Info("reusing the demo account", zap.String("email", spec.email))
 		return existing, nil
 	case !errors.Is(err, repository.ErrNotFound):
 		return nil, err
 	}
 
-	hash, err := auth.HashPassword(env("SEED_PASSWORD", "demo-password-123"), seedBcryptCost)
+	hash, err := auth.HashPassword(spec.password, seedBcryptCost)
 	if err != nil {
 		return nil, err
 	}
 
-	role := models.Role(env("SEED_ROLE", string(models.RoleAdmin)))
-	if !role.Valid() {
-		return nil, fmt.Errorf("seed: SEED_ROLE %q must be user or admin", role)
-	}
-
 	created, err := users.Create(ctx, models.User{
-		Email:         email,
+		Email:         spec.email,
 		PasswordHash:  &hash,
-		Role:          role,
+		Role:          spec.role,
 		EmailVerified: true,
 	})
 	if err != nil {
 		return nil, err
 	}
 
-	log.Info("demo account created", zap.String("email", email), zap.String("role", string(role)))
+	log.Info("demo account created",
+		zap.String("email", spec.email),
+		zap.String("role", string(spec.role)),
+	)
 	return created, nil
 }
 

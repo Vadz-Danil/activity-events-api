@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -17,6 +18,7 @@ import (
 
 type fakeUsers struct {
 	mu           sync.Mutex
+	lastLimit    int
 	seq          int64
 	rows         map[int64]models.User
 	tokens       *fakeTokens
@@ -57,6 +59,24 @@ func (f *fakeUsers) Create(_ context.Context, u models.User) (*models.User, erro
 	f.rows[u.ID] = u
 
 	return copyUser(u), nil
+}
+
+func (f *fakeUsers) List(_ context.Context, limit int) ([]models.UserSummary, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	f.lastLimit = limit
+
+	out := make([]models.UserSummary, 0, len(f.rows))
+	for _, u := range f.rows {
+		if len(out) == limit {
+			break
+		}
+		out = append(out, models.UserSummary{ID: u.ID, Email: u.Email, Role: u.Role})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
+
+	return out, nil
 }
 
 func (f *fakeUsers) ByID(_ context.Context, id int64) (*models.User, error) {

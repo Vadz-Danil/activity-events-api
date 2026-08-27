@@ -68,6 +68,7 @@ type eventResponse struct {
 }
 
 type eventPageResponse struct {
+	UserID     int64           `json:"user_id"`
 	Items      []eventResponse `json:"items"`
 	NextCursor string          `json:"next_cursor,omitempty"`
 }
@@ -89,13 +90,13 @@ func newEventResponse(e models.Event) eventResponse {
 	}
 }
 
-func newEventPageResponse(page *service.EventPage) eventPageResponse {
+func newEventPageResponse(userID int64, page *service.EventPage) eventPageResponse {
 	items := make([]eventResponse, 0, len(page.Items))
 	for _, e := range page.Items {
 		items = append(items, newEventResponse(e))
 	}
 
-	return eventPageResponse{Items: items, NextCursor: page.NextCursor}
+	return eventPageResponse{UserID: userID, Items: items, NextCursor: page.NextCursor}
 }
 
 func newBatchResponse(result *service.BatchResult) batchResponse {
@@ -105,6 +106,33 @@ func newBatchResponse(result *service.BatchResult) batchResponse {
 	}
 
 	return batchResponse{Created: created, CreatedCount: len(created), Duplicates: result.Duplicates}
+}
+
+type accountResponse struct {
+	ID          int64       `json:"id"`
+	Email       string      `json:"email"`
+	Role        models.Role `json:"role"`
+	EventCount  int64       `json:"event_count"`
+	LastEventAt *time.Time  `json:"last_event_at,omitempty"`
+}
+
+type accountsResponse struct {
+	Items []accountResponse `json:"items"`
+}
+
+func newAccountsResponse(users []models.UserSummary) accountsResponse {
+	items := make([]accountResponse, 0, len(users))
+	for _, u := range users {
+		items = append(items, accountResponse{
+			ID:          u.ID,
+			Email:       u.Email,
+			Role:        u.Role,
+			EventCount:  u.EventCount,
+			LastEventAt: utcOrNil(u.LastEventAt),
+		})
+	}
+
+	return accountsResponse{Items: items}
 }
 
 type methodsResponse struct {
@@ -190,6 +218,7 @@ type dayResponse struct {
 }
 
 type statsResponse struct {
+	UserID  int64            `json:"user_id"`
 	From    time.Time        `json:"from"`
 	To      time.Time        `json:"to"`
 	Bucket  string           `json:"bucket"`
@@ -220,8 +249,8 @@ func newRunsResponse(runs []models.AggregationRun) runsResponse {
 	return runsResponse{Items: items}
 }
 
-func newStatsResponse(s *service.Stats) statsResponse {
-	out := statsResponse{From: s.From, To: s.To, Bucket: s.Bucket.String()}
+func newStatsResponse(userID int64, s *service.Stats) statsResponse {
+	out := statsResponse{UserID: userID, From: s.From, To: s.To, Bucket: s.Bucket.String()}
 
 	for _, b := range s.Buckets {
 		out.Buckets = append(out.Buckets, bucketResponse{

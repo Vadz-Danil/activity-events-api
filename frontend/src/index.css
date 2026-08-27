@@ -314,6 +314,59 @@ code {
   background: var(--ink);
 }
 
+.scope {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 14px 16px;
+  background: var(--sheet-2);
+  border: 1px solid var(--rule);
+}
+
+.scope .field {
+  gap: 5px;
+}
+
+.scope .field input {
+  width: 108px;
+  padding: 7px 10px;
+  font-size: 13px;
+}
+
+.scope-label {
+  font-size: 10px;
+}
+
+.scope button {
+  font-family: var(--mono), monospace;
+  font-size: 12px;
+  padding: 8px 14px;
+}
+
+.scope-manual {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.scope select {
+  padding: 7px 10px;
+  font-family: var(--mono), monospace;
+  font-size: 13px;
+  color: var(--ink);
+  background: var(--sheet);
+  border: 1px solid var(--rule);
+  border-radius: 0;
+  min-width: 260px;
+  max-width: 100%;
+}
+
+.scope select:focus-visible {
+  outline: 2px solid var(--data);
+  outline-offset: 1px;
+}
+
 .content {
   display: flex;
   flex-direction: column;
@@ -871,6 +924,7 @@ button.primary:disabled {
 
 .status-connecting .dot { background: var(--warn); }
 .status-offline .dot { background: var(--bad); }
+.status-history .dot { background: var(--data-soft); }
 
 @keyframes pulse {
   0%, 100% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--ok) 45%, transparent); }

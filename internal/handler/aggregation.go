@@ -39,6 +39,11 @@ func (h *Aggregation) Stats(c *gin.Context) {
 		return
 	}
 
+	target, ok := targetUser(c, userID)
+	if !ok {
+		return
+	}
+
 	from, ok := timeQuery(c, "from")
 	if !ok {
 		return
@@ -48,7 +53,7 @@ func (h *Aggregation) Stats(c *gin.Context) {
 		return
 	}
 
-	query := service.StatsQuery{UserID: userID, Daily: c.Query("granularity") == "day"}
+	query := service.StatsQuery{UserID: target, Daily: c.Query("granularity") == "day"}
 	if from != nil {
 		query.From = *from
 	}
@@ -62,7 +67,7 @@ func (h *Aggregation) Stats(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, newStatsResponse(stats))
+	c.JSON(http.StatusOK, newStatsResponse(target, stats))
 }
 
 func (h *Aggregation) Trigger(c *gin.Context) {

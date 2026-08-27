@@ -173,8 +173,13 @@ func (h *Event) List(c *gin.Context) {
 		return
 	}
 
+	target, ok := targetUser(c, userID)
+	if !ok {
+		return
+	}
+
 	query := service.EventQuery{
-		UserID: userID,
+		UserID: target,
 		Types:  c.QueryArray("type"),
 		Cursor: c.Query("cursor"),
 	}
@@ -204,7 +209,7 @@ func (h *Event) List(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, newEventPageResponse(page))
+	c.JSON(http.StatusOK, newEventPageResponse(target, page))
 }
 
 func (h *Event) fail(c *gin.Context, err error) {
@@ -258,6 +263,31 @@ func currentUser(c *gin.Context) (int64, bool) {
 		return 0, false
 	}
 	return userID, true
+}
+
+func targetUser(c *gin.Context, self int64) (int64, bool) {
+	raw := c.Query("user_id")
+	if raw == "" {
+		return self, true
+	}
+
+	requested, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil || requested <= 0 {
+		response.Error(c, http.StatusBadRequest, response.CodeValidationFailed,
+			"user_id must be a positive number")
+		return 0, false
+	}
+	if requested == self {
+		return self, true
+	}
+
+	if role, _ := middleware.RoleFrom(c); role != models.RoleAdmin {
+		response.Error(c, http.StatusForbidden, response.CodeForbidden,
+			"Reading another user's activity requires the admin role")
+		return 0, false
+	}
+
+	return requested, true
 }
 
 func timeQuery(c *gin.Context, key string) (*time.Time, bool) {

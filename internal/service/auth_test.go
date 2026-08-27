@@ -450,3 +450,26 @@ func hashFor(t *testing.T, password string) string {
 	require.NoError(t, err)
 	return hash
 }
+
+func TestAccountsClampsTheLimit(t *testing.T) {
+	tests := []struct {
+		name string
+		ask  int
+		want int
+	}{
+		{"zero falls back to the default", 0, DefaultAccountsLimit},
+		{"a negative number falls back too", -5, DefaultAccountsLimit},
+		{"a sane number is passed through", 10, 10},
+		{"an oversized ask is capped", MaxAccountsLimit * 3, MaxAccountsLimit},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f := newAuthFixture(t, nil)
+
+			_, err := f.svc.Accounts(context.Background(), tt.ask)
+			require.NoError(t, err)
+			require.Equal(t, tt.want, f.users.lastLimit)
+		})
+	}
+}

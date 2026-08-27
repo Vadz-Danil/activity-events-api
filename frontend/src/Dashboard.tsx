@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useState, type SyntheticEvent } from 'react'
 
-import { ApiError, getStats, type Session, type Stats } from './api'
+import { ApiError, getStats, listAccounts, type Account, type Session, type Stats } from './api'
 import { AdminPanel } from './AdminPanel'
 import { ActivityColumns, dayLabel, Heatmap, hourLabel, TypeBars, type Column } from './charts'
 import { LiveFeed } from './LiveFeed'
@@ -27,8 +27,12 @@ export function Dashboard({
   const [stats, setStats] = useState<Stats | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [viewing, setViewing] = useState<number | undefined>(undefined)
+  const [viewingDraft, setViewingDraft] = useState('')
+  const [accounts, setAccounts] = useState<Account[]>([])
 
   const token = session.access_token
+  const isAdmin = session.user.role === 'admin'
 
   const selected = ranges.find((r) => r.id === range)!
 
@@ -38,7 +42,7 @@ export function Dashboard({
 
     setLoading(true)
     try {
-      setStats(await getStats(token, { from, granularity: option.granularity }))
+      setStats(await getStats(token, { from, granularity: option.granularity, userId: viewing }))
       setError(null)
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
@@ -49,12 +53,59 @@ export function Dashboard({
     } finally {
       setLoading(false)
     }
-  }, [token, range, onUnauthorized])
+  }, [token, range, viewing, onUnauthorized])
 
   useEffect(() => {
     void load()
   }, [load])
 
+  useEffect(() => {
+    if (!isAdmin) {
+      return
+    }
+
+    let cancelled = false
+    listAccounts(token)
+      .then((page) => !cancelled && setAccounts(page.items))
+      .catch(() => undefined)
+
+    return () => {
+      cancelled = true
+    }
+  }, [token, isAdmin])
+
+  function selectScope(raw: string) {
+    setError(null)
+    setViewingDraft('')
+    setViewing(raw === '' ? undefined : Number(raw))
+  }
+
+  function applyScope(e: SyntheticEvent) {
+    e.preventDefault()
+
+    const raw = viewingDraft.trim()
+    if (raw === '' || Number(raw) === session.user.id) {
+      resetScope()
+      return
+    }
+
+    const id = Number(raw)
+    if (!Number.isInteger(id) || id <= 0) {
+      setError('Ідентифікатор користувача має бути додатним числом')
+      return
+    }
+
+    setError(null)
+    setViewing(id)
+  }
+
+  function resetScope() {
+    setError(null)
+    setViewing(undefined)
+    setViewingDraft('')
+  }
+
+  const others = accounts.filter((a) => a.id !== session.user.id)
   const buckets = stats?.buckets ?? []
   const days = stats?.days ?? []
   const daily = selected.granularity === 'day'
@@ -114,6 +165,45 @@ export function Dashboard({
         ))}
       </div>
 
+      {isAdmin && (
+        <div className="scope">
+          <label className="field">
+            <span className="scope-label">Акаунт</span>
+            <select value={viewing ?? ''} onChange={(e) => selectScope(e.target.value)}>
+              <option value="">свій · {session.user.email}</option>
+              {others.map((account) => (
+                <option key={account.id} value={account.id}>
+                  {account.email} · {account.role} · {account.event_count.toLocaleString('uk-UA')}
+                </option>
+              ))}
+              {viewing !== undefined && !accounts.some((a) => a.id === viewing) && (
+                <option value={viewing}>#{viewing}</option>
+              )}
+            </select>
+          </label>
+
+          <form className="scope-manual" onSubmit={applyScope}>
+            <label className="field">
+              <span className="scope-label">або id</span>
+              <input
+                value={viewingDraft}
+                onChange={(e) => setViewingDraft(e.target.value)}
+                inputMode="numeric"
+                placeholder="42"
+                aria-label="Ідентифікатор користувача"
+              />
+            </label>
+            <button type="submit">Показати</button>
+          </form>
+
+          {viewing !== undefined && (
+            <button type="button" onClick={resetScope}>
+              Назад до свого
+            </button>
+          )}
+        </div>
+      )}
+
       {error && <p className="error">{error}</p>}
 
       <div className={loading && stats ? 'content is-loading' : 'content'}>
@@ -164,11 +254,9 @@ export function Dashboard({
         </div>
       </div>
 
-      <LiveFeed token={token} onUnauthorized={onUnauthorized} onCreated={load} />
+      <LiveFeed token={token} onUnauthorized={onUnauthorized} onCreated={load} userId={viewing} />
 
-      {session.user.role === 'admin' && (
-        <AdminPanel token={token} onUnauthorized={onUnauthorized} onRecomputed={load} />
-      )}
+      {isAdmin && <AdminPanel token={token} onUnauthorized={onUnauthorized} onRecomputed={load} />}
 
       <footer className="foot muted">
         Статистику рахує фоновий воркер що чотири години; свіжі події з’являються у стрічці одразу, а у вікнах — після

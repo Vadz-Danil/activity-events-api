@@ -16,6 +16,7 @@ import (
 
 type UserRepository interface {
 	Create(ctx context.Context, u models.User) (*models.User, error)
+	List(ctx context.Context, limit int) ([]models.UserSummary, error)
 	ByID(ctx context.Context, id int64) (*models.User, error)
 	ByEmail(ctx context.Context, email string) (*models.User, error)
 	ByGoogleSub(ctx context.Context, sub string) (*models.User, error)
@@ -103,6 +104,22 @@ func NewAuth(d AuthDeps) (*Auth, error) {
 		decoyHash:  decoy,
 		now:        now,
 	}, nil
+}
+
+const (
+	DefaultAccountsLimit = 50
+	MaxAccountsLimit     = 200
+)
+
+func (s *Auth) Accounts(ctx context.Context, limit int) ([]models.UserSummary, error) {
+	switch {
+	case limit <= 0:
+		limit = DefaultAccountsLimit
+	case limit > MaxAccountsLimit:
+		limit = MaxAccountsLimit
+	}
+
+	return s.users.List(ctx, limit)
 }
 
 func (s *Auth) Register(ctx context.Context, email, password string, meta ClientMeta) (*Session, error) {

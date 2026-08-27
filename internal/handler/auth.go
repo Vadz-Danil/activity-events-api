@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
@@ -24,6 +25,7 @@ type AuthService interface {
 	Refresh(ctx context.Context, rawToken string, meta service.ClientMeta) (*service.Session, error)
 	Logout(ctx context.Context, rawToken string) error
 	User(ctx context.Context, id int64) (*models.User, error)
+	Accounts(ctx context.Context, limit int) ([]models.UserSummary, error)
 }
 
 type Auth struct {
@@ -37,8 +39,30 @@ func NewAuth(svc AuthService, log *zap.Logger, frontendURL string, google bool) 
 	return &Auth{service: svc, log: log, frontendURL: frontendURL, google: google}
 }
 
-// Methods lets the client find out which sign-in options this deployment actually
-// has, so it never offers a button that can only fail.
+func (h *Auth) Accounts(c *gin.Context) {
+	limit := 0
+	if raw := c.Query("limit"); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil {
+			response.Error(c, http.StatusBadRequest, response.CodeValidationFailed, "limit must be a number")
+			return
+		}
+		limit = parsed
+	}
+
+	accounts, err := h.service.Accounts(c.Request.Context(), limit)
+	if err != nil {
+		h.log.Error("list accounts",
+			zap.String("request_id", middleware.RequestIDFrom(c)),
+			zap.Error(err),
+		)
+		response.Error(c, http.StatusInternalServerError, response.CodeInternal, "Internal server error")
+		return
+	}
+
+	c.JSON(http.StatusOK, newAccountsResponse(accounts))
+}
+
 func (h *Auth) Methods(c *gin.Context) {
 	c.JSON(http.StatusOK, methodsResponse{Password: true, Google: h.google})
 }

@@ -70,6 +70,7 @@ const testFrontendURL = "http://localhost:5173"
 var errUnexpected = errors.New("boom")
 
 type fakeAuthService struct {
+	accounts   []models.UserSummary
 	email      string
 	authURL    string
 	callback   *service.GoogleCallback
@@ -127,6 +128,10 @@ func (f *fakeAuthService) Refresh(context.Context, string, service.ClientMeta) (
 }
 
 func (f *fakeAuthService) Logout(context.Context, string) error { return nil }
+
+func (f *fakeAuthService) Accounts(context.Context, int) ([]models.UserSummary, error) {
+	return f.accounts, f.err
+}
 
 func (f *fakeAuthService) User(context.Context, int64) (*models.User, error) {
 	return &models.User{ID: 1, Email: "user@example.com", Role: models.RoleUser}, nil

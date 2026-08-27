@@ -145,13 +145,14 @@ export function exchangeGoogleCode(code: string): Promise<Session> {
 
 export function listEvents(
   token: string,
-  params: { limit?: number; cursor?: string; from?: string; type?: string } = {},
+  params: { limit?: number; cursor?: string; from?: string; type?: string; userId?: number } = {},
 ): Promise<EventPage> {
   const query = new URLSearchParams()
   if (params.limit) query.set('limit', String(params.limit))
   if (params.cursor) query.set('cursor', params.cursor)
   if (params.from) query.set('from', params.from)
   if (params.type) query.set('type', params.type)
+  if (params.userId) query.set('user_id', String(params.userId))
 
   return call<EventPage>(`/api/v1/events?${query}`, { headers: authorized(token) })
 }
@@ -169,10 +170,11 @@ export function createEvent(
 
 export function getStats(
   token: string,
-  params: { from: string; granularity?: 'bucket' | 'day' },
+  params: { from: string; granularity?: 'bucket' | 'day'; userId?: number },
 ): Promise<Stats> {
   const query = new URLSearchParams({ from: params.from })
   if (params.granularity === 'day') query.set('granularity', 'day')
+  if (params.userId) query.set('user_id', String(params.userId))
 
   return call<Stats>(`/api/v1/stats/activity?${query}`, { headers: authorized(token) })
 }
@@ -230,6 +232,18 @@ function emit(frame: string, onEvent: (event: ActivityEvent) => void): void {
     onEvent(JSON.parse(data) as ActivityEvent)
   } catch {
   }
+}
+
+export type Account = {
+  id: number
+  email: string
+  role: 'user' | 'admin'
+  event_count: number
+  last_event_at?: string
+}
+
+export function listAccounts(token: string, limit = 50): Promise<{ items: Account[] }> {
+  return call<{ items: Account[] }>(`/api/v1/admin/users?limit=${limit}`, { headers: authorized(token) })
 }
 
 export type RunStatus = 'succeeded' | 'failed' | 'skipped'
