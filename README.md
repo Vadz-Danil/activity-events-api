@@ -323,7 +323,7 @@ Errors share one envelope, so a client branches on `code` rather than on prose:
 
 ## API documentation
 
-The full contract lives in [`api/openapi.yaml`](api/openapi.yaml) — 20 operations, every error code, every query
+The full contract lives in [`api/openapi.yaml`](api/openapi.yaml) — 22 operations, every error code, every query
 parameter, with the reasoning attached to the endpoints where it matters.
 
 * Browse it on the deployment: **https://api--activity-events--4jynm8rb8gw5.code.run/docs**
@@ -353,6 +353,7 @@ migrations, so a loose file would need one more `COPY` and a path variable — a
 | `POST /api/v1/admin/aggregation/runs`                            | admin  | Recompute one window                                            |
 | `GET /api/v1/admin/aggregation/runs`                             | admin  | Run history                                                     |
 | `GET /healthz` · `/readyz` · `/metrics`                          | open   | Operations                                                      |
+| `GET /docs` · `/openapi.yaml`                                    | open   | The API contract, rendered and raw                              |
 
 Google sign-in is optional: without `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` and
 `GOOGLE_REDIRECT_URL` the API reports `google: false` from `/auth/methods` and the SPA leaves the button out, rather
@@ -429,7 +430,7 @@ why `LOG_FORMAT` defaults to `json` here: parsing a human-readable log format ba
 structured logging exists to avoid. Set `LOG_FORMAT=console` if you would rather read logs in a terminal — you lose the
 `level` label and keep everything else.
 
-The fourteen dashboard panels in `deploy/grafana/dashboards` are provisioned from the repository rather than clicked
+The fifteen dashboard panels in `deploy/grafana/dashboards` are provisioned from the repository rather than clicked
 together by hand, and the last two put the logs on the same screen as the graphs:
 a spike in 5xx and the lines that caused it, side by side.
 

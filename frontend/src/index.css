@@ -1031,6 +1031,16 @@ button.primary:disabled {
   .composer .field {
     flex-basis: 100%;
   }
+
+  .split > *,
+  .panel {
+    min-width: 0;
+  }
+
+  .heatmap,
+  .chart {
+    overflow-x: auto;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

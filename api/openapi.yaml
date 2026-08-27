@@ -564,6 +564,36 @@ paths:
                   status: { type: string, example: unavailable }
                   database: { type: string, example: down }
 
+  /docs:
+    get:
+      tags: [operations]
+      operationId: getDocs
+      summary: This document, rendered
+      description: Swagger UI over `/openapi.yaml`. Served only when the process runs the API.
+      security: []
+      responses:
+        "200":
+          description: An HTML page
+          content:
+            text/html:
+              schema: { type: string }
+
+  /openapi.yaml:
+    get:
+      tags: [operations]
+      operationId: getOpenAPI
+      summary: This document
+      description: |
+        The specification itself, embedded in the binary so that it cannot drift from the code
+        that ships beside it. Opens in any editor offline.
+      security: []
+      responses:
+        "200":
+          description: The OpenAPI document
+          content:
+            application/yaml:
+              schema: { type: string }
+
   /metrics:
     get:
       tags: [operations]
