@@ -7,7 +7,7 @@ The stack is split across three free-tier providers:
 | `api`, `worker` containers | Northflank (Sandbox plan) | two always-on services, no sleep, no card required     |
 | PostgreSQL                 | Neon                      | 0.5 GB, scales to zero after 5 minutes of inactivity   |
 | React SPA                  | Cloudflare Pages          | static hosting, 500 builds per month                   |
-| Prometheus, Grafana        | local `docker compose`    | monitoring is demonstrated locally and is not deployed |
+| Prometheus, Loki, Grafana  | local `docker compose`    | monitoring is demonstrated locally and is not deployed |
 
 The image is built once by GitHub Actions, pushed to GHCR and deployed to both Northflank services by digest-free tag
 `ghcr.io/<owner>/<repo>:<commit sha>`.
@@ -153,15 +153,48 @@ Neon → Pages project (gives `https://<project>.pages.dev` for `FRONTEND_URL` a
 
 ## Demo data
 
-`make seed` creates a demo account and fills a week of events shaped like a working day, then aggregates those windows
-so the dashboard has something to draw. The account defaults to `demo@example.com` with the password
-`demo-password-123` and the `admin` role; override them with `SEED_EMAIL`, `SEED_PASSWORD` and `SEED_ROLE`.
+`make seed` creates two demo accounts and fills a week of events shaped like a working day, then aggregates those
+windows so the dashboard has something to draw. The admin account defaults to `demo@example.com` with the password
+`demo-password-123`; the plain one is `viewer@example.com` / `viewer-password-123` and exists so that `?user_id=`, the
+account picker and the role split have something to demonstrate. Override them with `SEED_EMAIL`, `SEED_PASSWORD`,
+`SEED_ROLE`, `SEED_VIEWER_EMAIL` and `SEED_VIEWER_PASSWORD`.
+
+### Seeding a deployment
+
+The `seed` binary ships in the image, so the direct route is a one-off Northflank job running `seed` with the service's
+`DATABASE_URL`. The pipeline deliberately does **not** seed: filling a database on every push would be a surprising
+thing for a deploy to do.
+
+The deployed pair was created without touching the database at all, which works from anywhere:
+
+```bash
+API=https://<api-host>
+
+# 1. the admin account, promoted to the admin role once (SEED_ROLE, or one UPDATE)
+# 2. the plain account — plain registration is enough, `user` is the default role
+curl -X POST $API/api/v1/auth/register -H 'Content-Type: application/json' \
+  -d '{"email":"viewer@example.com","password":"viewer123"}'
+
+# 3. events, up to 100 per call, backdated with occurred_at
+curl -X POST $API/api/v1/events/batch -H "Authorization: Bearer $VIEWER_TOKEN" \
+  -H 'Content-Type: application/json' -d @batch.json
+
+# 4. aggregate the windows those events landed in — the scheduler only moves forward,
+#    so anything backdated past the watermark needs an explicit recompute
+curl -X POST $API/api/v1/admin/aggregation/runs -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H 'Content-Type: application/json' -d '{"bucket_start":"2026-08-26T12:00:00Z"}'
+```
+
+Step 4 is the one people forget: events written into an already-aggregated window are real and visible in the feed, but
+the charts stay flat until that window is recomputed.
 
 These credentials are documented here rather than shown on the sign-in screen: the repository is public, and a
 pre-filled password on a login form is an invitation.
 
 ## Local monitoring
 
-Prometheus and Grafana stay in `docker-compose.yaml` and are started with
-`make infra`. `deploy/prometheus/prometheus.yml` also carries a job for the deployed API, so the local Grafana can graph
-production metrics over HTTPS.
+Prometheus, Loki and Grafana stay in `docker-compose.yaml` and are started with `make infra`. Grafana Alloy reads the
+container logs through the Docker API and ships them to Loki, so the same dashboard carries graphs and log lines.
+`deploy/prometheus/prometheus.yml` also carries a job for the deployed API, so the local Grafana can graph production
+metrics over HTTPS — log collection, however, stays local, since Alloy reads a Docker socket that Northflank does not
+expose.

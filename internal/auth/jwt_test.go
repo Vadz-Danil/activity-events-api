@@ -76,12 +76,10 @@ func unsignedToken(t *testing.T, issuer string) string {
 	t.Helper()
 
 	token := jwt.NewWithClaims(jwt.SigningMethodNone, &Claims{
-		Role: models.RoleAdmin,
-		RegisteredClaims: jwt.RegisteredClaims{
-			Subject:   "1",
-			Issuer:    issuer,
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour)),
-		},
+		Role:      models.RoleAdmin,
+		Subject:   "1",
+		Issuer:    issuer,
+		ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour)),
 	})
 
 	raw, err := token.SignedString(jwt.UnsafeAllowNoneSignatureType)
@@ -93,12 +91,10 @@ func tokenWithRole(t *testing.T, issuer, role string) string {
 	t.Helper()
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, &Claims{
-		Role: models.Role(role),
-		RegisteredClaims: jwt.RegisteredClaims{
-			Subject:   "1",
-			Issuer:    issuer,
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour)),
-		},
+		Role:      models.Role(role),
+		Subject:   "1",
+		Issuer:    issuer,
+		ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour)),
 	})
 
 	raw, err := token.SignedString([]byte(testSecret))

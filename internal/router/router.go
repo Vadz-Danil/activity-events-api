@@ -52,6 +52,12 @@ func New(d Deps) *gin.Engine {
 	engine.GET("/metrics", gin.WrapH(d.Metrics.Handler()))
 
 	if d.Config.App.Mode.RunsAPI() {
+		docs := handler.NewDocs()
+		engine.GET("/docs", docs.Page)
+		engine.GET("/openapi.yaml", docs.Spec)
+	}
+
+	if d.Config.App.Mode.RunsAPI() {
 		registerAPI(engine, d)
 	}
 

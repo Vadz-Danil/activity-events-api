@@ -54,15 +54,13 @@ func (m *Manager) Issue(userID int64, role models.Role, now time.Time) (Access, 
 	expiresAt := now.Add(m.accessTTL)
 
 	claims := &Claims{
-		Role: role,
-		RegisteredClaims: jwt.RegisteredClaims{
-			Subject:   strconv.FormatInt(userID, 10),
-			Issuer:    m.issuer,
-			ID:        uuid.NewString(),
-			IssuedAt:  jwt.NewNumericDate(now),
-			NotBefore: jwt.NewNumericDate(now),
-			ExpiresAt: jwt.NewNumericDate(expiresAt),
-		},
+		Role:      role,
+		Subject:   strconv.FormatInt(userID, 10),
+		Issuer:    m.issuer,
+		ID:        uuid.NewString(),
+		IssuedAt:  jwt.NewNumericDate(now),
+		NotBefore: jwt.NewNumericDate(now),
+		ExpiresAt: jwt.NewNumericDate(expiresAt),
 	}
 
 	signed, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString(m.secret)

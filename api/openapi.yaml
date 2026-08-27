@@ -1,0 +1,801 @@
+openapi: 3.0.3
+
+info:
+  title: activity-events-api
+  version: "1.0.0"
+  description: |
+    Records user activity events and folds them into four-hour windows with a background worker.
+
+    **Two clocks.** `occurred_at` is when the event happened and may be sent by the client;
+    `created_at` is when the database stored the row and cannot be forged. Statistics are computed
+    over `occurred_at`.
+
+    **Aggregated numbers lag on purpose.** A window is counted only after it closes, so an event
+    recorded now appears in `/stats/activity` after the worker's next pass — but it reaches
+    `/events` and `/events/stream` immediately.
+
+    **Reads are scoped to the caller.** Every feed and every statistic answers for the `user_id`
+    inside the access token. Passing `?user_id=` for somebody else requires the `admin` role.
+
+servers:
+  - url: https://api--activity-events--4jynm8rb8gw5.code.run
+    description: deployed
+  - url: http://localhost:8080
+    description: local
+
+tags:
+  - name: auth
+    description: Registration, sign-in, token rotation
+  - name: events
+    description: Recording and reading activity events
+  - name: statistics
+    description: Aggregated four-hour windows and daily rollups
+  - name: admin
+    description: Requires the admin role
+  - name: operations
+    description: Health probes and metrics
+
+security:
+  - bearerAuth: []
+
+paths:
+  /api/v1/auth/methods:
+    get:
+      tags: [auth]
+      summary: Which sign-in options this deployment has
+      operationId: getAuthMethods
+      description: |
+        Google is optional. Without `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` and
+        `GOOGLE_REDIRECT_URL` this reports `google: false` and the client hides the button rather
+        than offering one that can only fail.
+      security: []
+      responses:
+        "200":
+          description: Available methods
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [password, google]
+                properties:
+                  password: { type: boolean, example: true }
+                  google: { type: boolean, example: true }
+
+  /api/v1/auth/register:
+    post:
+      tags: [auth]
+      summary: Create an account
+      operationId: register
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/Credentials" }
+      responses:
+        "201":
+          description: Account created, session issued
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Session" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "409":
+          description: The address is already registered
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+              example: { error: { code: email_taken, message: This email is already registered } }
+
+  /api/v1/auth/login:
+    post:
+      tags: [auth]
+      summary: Sign in with a password
+      operationId: login
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/Credentials" }
+      responses:
+        "200":
+          description: Session issued
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Session" }
+        "401":
+          description: Wrong address or password
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+              example: { error: { code: invalid_credentials, message: Email or password is incorrect } }
+
+  /api/v1/auth/google/start:
+    get:
+      tags: [auth]
+      summary: Begin the Google authorization-code flow
+      operationId: startGoogleFlow
+      description: Redirects to Google. The state and PKCE verifier are stored server side.
+      security: []
+      parameters:
+        - name: redirect_to
+          in: query
+          schema: { type: string }
+          description: Client-side path to return to after the callback.
+      responses:
+        "302": { description: Redirect to Google }
+        "404":
+          description: Google sign-in is not configured on this deployment
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /api/v1/auth/google/callback:
+    get:
+      tags: [auth]
+      summary: Google redirects here
+      operationId: completeGoogleFlow
+      description: |
+        Exchanges nothing itself — it validates `state`, then bounces the browser back to the
+        frontend with a one-time code the SPA trades in through `/auth/google/exchange`. The code
+        never travels through a URL the user could bookmark twice.
+      security: []
+      parameters:
+        - { name: code, in: query, schema: { type: string } }
+        - { name: state, in: query, schema: { type: string } }
+        - { name: error, in: query, schema: { type: string } }
+      responses:
+        "302": { description: Redirect back to the frontend }
+
+  /api/v1/auth/google/exchange:
+    post:
+      tags: [auth]
+      summary: Trade the one-time code for a session
+      operationId: exchangeGoogleCode
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code]
+              properties:
+                code: { type: string }
+      responses:
+        "200":
+          description: Session issued
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Session" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+
+  /api/v1/auth/refresh:
+    post:
+      tags: [auth]
+      summary: Rotate the refresh token
+      operationId: refreshSession
+      description: |
+        Every refresh issues a new pair and invalidates the old token. Presenting a token that was
+        already used revokes the entire family — the assumption being that a replayed token is a
+        stolen one.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refresh_token]
+              properties:
+                refresh_token: { type: string }
+      responses:
+        "200":
+          description: New session
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Session" }
+        "401":
+          description: Token is invalid, expired or already used
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /api/v1/auth/logout:
+    post:
+      tags: [auth]
+      summary: Revoke a refresh-token family
+      operationId: logout
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refresh_token]
+              properties:
+                refresh_token: { type: string }
+      responses:
+        "204": { description: "Revoked, or already gone" }
+
+  /api/v1/auth/me:
+    get:
+      tags: [auth]
+      summary: The account behind the access token
+      operationId: getCurrentUser
+      responses:
+        "200":
+          description: Current user
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/User" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /api/v1/events:
+    post:
+      tags: [events]
+      summary: Record one event
+      operationId: recordEvent
+      description: |
+        The author is the account in the token, never a field in the body.
+
+        Sending the same `Idempotency-Key` twice answers `200` with the row that already exists
+        instead of `201`, and writes nothing. A partial unique index on `(user_id, idempotency_key)`
+        decides that, so two concurrent requests cannot both win.
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          schema: { type: string, maxLength: 128 }
+          description: Also accepted as `idempotency_key` in the body. The header wins if both are set.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/EventInput" }
+            examples:
+              minimal:
+                summary: Type only
+                value: { type: page_view }
+              full:
+                summary: With payload, own timestamp and an idempotency key
+                value:
+                  type: page_view
+                  payload: { page: /home }
+                  occurred_at: "2026-08-27T07:17:36Z"
+                  idempotency_key: checkout-42
+      responses:
+        "201":
+          description: Recorded
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Event" }
+        "200":
+          description: This idempotency key was already used; the existing row is returned
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Event" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "413": { $ref: "#/components/responses/PayloadTooLarge" }
+
+    get:
+      tags: [events]
+      summary: Read events, filtered by user and date range
+      operationId: listEvents
+      description: |
+        Keyset pagination: the cursor carries `(occurred_at, id)` and the query compares tuples, so
+        events sharing a timestamp are neither lost nor repeated between pages. Pass `next_cursor`
+        back as `cursor` for the following page; its absence means the last page.
+      parameters:
+        - $ref: "#/components/parameters/UserId"
+        - name: from
+          in: query
+          schema: { type: string, format: date-time }
+          description: Inclusive lower bound on `occurred_at`, RFC 3339.
+        - name: to
+          in: query
+          schema: { type: string, format: date-time }
+          description: Exclusive upper bound on `occurred_at`, RFC 3339.
+        - name: type
+          in: query
+          schema: { type: array, items: { type: string } }
+          style: form
+          explode: true
+          description: Repeat to match several types at once.
+        - name: limit
+          in: query
+          schema: { type: integer, default: 50, maximum: 200 }
+        - name: cursor
+          in: query
+          schema: { type: string }
+      responses:
+        "200":
+          description: One page, newest first
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EventPage" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /api/v1/events/batch:
+    post:
+      tags: [events]
+      summary: Record up to 100 events in one transaction
+      operationId: recordEventBatch
+      description: |
+        Duplicates are counted rather than rejected, so a client replaying a batch after a timeout
+        gets a truthful answer instead of an error. Reusing one idempotency key twice *within* the
+        same batch is a client bug and is refused.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [events]
+              properties:
+                events:
+                  type: array
+                  minItems: 1
+                  maxItems: 100
+                  items: { $ref: "#/components/schemas/EventInput" }
+      responses:
+        "201":
+          description: Stored
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  created:
+                    type: array
+                    items: { $ref: "#/components/schemas/Event" }
+                  created_count: { type: integer, example: 98 }
+                  duplicates: { type: integer, example: 2 }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /api/v1/events/stream:
+    get:
+      tags: [events]
+      summary: Live events over server-sent events
+      operationId: streamEvents
+      description: |
+        A `GET` that never completes. Each new event of the calling account arrives as one frame;
+        a `: keep-alive` comment every 20 seconds keeps idle proxies from closing the connection.
+
+        Always the caller's own account — there is no `user_id` here. Reading somebody's activity
+        in real time is surveillance rather than reporting.
+
+        Note that `EventSource` cannot send an `Authorization` header, so a browser client reads
+        this with `fetch` and a `ReadableStream`.
+      responses:
+        "200":
+          description: An open stream
+          content:
+            text/event-stream:
+              schema: { type: string }
+              example: |
+                id: 709
+                event: activity
+                data: {"id":709,"type":"page_view","payload":{"page":"/home"},"occurred_at":"2026-08-27T07:17:51.300537Z","created_at":"2026-08-27T07:17:51.316639Z"}
+
+                : keep-alive
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /api/v1/stats/activity:
+    get:
+      tags: [statistics]
+      summary: Aggregated activity
+      operationId: getActivityStats
+      description: |
+        Reads the bucket table the worker maintains — never the raw events — which is why the answer
+        is the same size whether the account has a thousand events or a billion.
+
+        Daily numbers are a rollup of the same six four-hour buckets rather than a second count, so
+        the two granularities cannot disagree.
+      parameters:
+        - $ref: "#/components/parameters/UserId"
+        - name: from
+          in: query
+          schema: { type: string, format: date-time }
+          description: Defaults to seven days ago. The window may not exceed 90 days.
+        - name: to
+          in: query
+          schema: { type: string, format: date-time }
+          description: Defaults to now.
+        - name: granularity
+          in: query
+          schema: { type: string, enum: [bucket, day], default: bucket }
+          description: "`day` returns `days` instead of `buckets`."
+      responses:
+        "200":
+          description: Aggregated windows
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Stats" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /api/v1/admin/users:
+    get:
+      tags: [admin]
+      summary: Accounts, with how many events each has
+      operationId: listAccounts
+      description: |
+        Fills the dashboard's account picker so an admin does not have to guess numeric ids.
+
+        The counts come from the bucket table rather than a scan over events, which also means they
+        exclude the window that has not closed yet. The response is a purpose-built projection: no
+        password hashes, no Google subject ids.
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, default: 50, maximum: 200 }
+      responses:
+        "200":
+          description: Accounts, busiest first
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/Account" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /api/v1/admin/aggregation/runs:
+    get:
+      tags: [admin]
+      summary: History of aggregation runs
+      operationId: listAggregationRuns
+      description: |
+        Every attempt is recorded, including failures. This table is both the audit log and the
+        watermark the scheduler reads to decide what is still unaggregated.
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, default: 20, maximum: 100 }
+      responses:
+        "200":
+          description: Runs, newest first
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/Run" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+    post:
+      tags: [admin]
+      summary: Recompute one window by hand
+      operationId: triggerAggregation
+      description: |
+        The same function the worker runs on its own schedule, only with `trigger: manual`. Both
+        paths take the same transaction-scoped advisory lock, so a manual run colliding with a
+        scheduled one records `skipped` instead of double counting.
+
+        Recomputing is an UPSERT, so replaying a window any number of times converges on the same
+        row. That is the supported way to pick up an event that was backdated into a window the
+        watermark has already passed.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                bucket_start:
+                  type: string
+                  format: date-time
+                  description: Any instant inside the window; it is truncated to the window start. Omit for the last closed window.
+      responses:
+        "202":
+          description: The run finished and was recorded
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Run" }
+        "400":
+          description: The window has not closed yet
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+              example:
+                error:
+                  code: bucket_not_closed
+                  message: This bucket has not closed yet, only a finished window can be aggregated
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /healthz:
+    get:
+      tags: [operations]
+      summary: Liveness — the process answers
+      operationId: getLiveness
+      description: |
+        Touches nothing but the process itself. Both the liveness and the readiness probe of the
+        deployment point here on purpose: `/readyz` pings the database, and a probe running every
+        few seconds would keep a scale-to-zero database awake around the clock.
+      security: []
+      responses:
+        "200":
+          description: Alive
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: ok }
+                  version: { type: string, example: 1a2b3c4 }
+                  mode: { type: string, enum: [api, worker, all] }
+
+  /readyz:
+    get:
+      tags: [operations]
+      summary: Readiness — the database answers too
+      operationId: getReadiness
+      security: []
+      responses:
+        "200":
+          description: Ready
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: ok }
+                  database: { type: string, example: up }
+        "503":
+          description: The database did not answer within two seconds
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: unavailable }
+                  database: { type: string, example: down }
+
+  /metrics:
+    get:
+      tags: [operations]
+      summary: Prometheus metrics
+      operationId: getMetrics
+      description: |
+        Plain text, pulled by Prometheus every 15 seconds. The api and the worker export the same
+        metric names told apart by a `component` label.
+      security: []
+      responses:
+        "200":
+          description: Metrics in the Prometheus exposition format
+          content:
+            text/plain:
+              schema: { type: string }
+        "500":
+          description: A collector failed while gathering
+          content:
+            text/plain:
+              schema: { type: string }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Access token from `/auth/login`, `/auth/register` or `/auth/refresh`. Valid for 15 minutes.
+
+  parameters:
+    UserId:
+      name: user_id
+      in: query
+      schema: { type: integer, format: int64, minimum: 1 }
+      description: |
+        Whose activity to read. Defaults to the caller. Asking for somebody else requires the
+        `admin` role and is refused with `403` otherwise.
+
+  responses:
+    ValidationFailed:
+      description: The request did not pass validation
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+          example: { error: { code: validation_failed, message: from must be before to } }
+    Unauthorized:
+      description: Missing, malformed or expired access token
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+          example: { error: { code: unauthorized, message: Authorization header with a bearer token is required } }
+    Forbidden:
+      description: The token is valid but the role is not enough
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+          example: { error: { code: forbidden, message: Reading another user's activity requires the admin role } }
+    PayloadTooLarge:
+      description: The body exceeds `MAX_BODY_BYTES`
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+          example: { error: { code: payload_too_large, message: Request body is too large } }
+
+  schemas:
+    Error:
+      type: object
+      description: Every failure shares this envelope, so a client branches on `code` rather than on prose.
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              enum:
+                - validation_failed
+                - invalid_credentials
+                - email_taken
+                - password_login_unavailable
+                - invalid_token
+                - unauthorized
+                - forbidden
+                - not_found
+                - payload_too_large
+                - invalid_oauth_state
+                - invalid_cursor
+                - bucket_not_closed
+                - google_disabled
+                - google_email_unverified
+                - internal_error
+            message: { type: string }
+
+    Credentials:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string, format: email, maxLength: 254, example: you@example.com }
+        password: { type: string, minLength: 8, example: super-secret }
+
+    User:
+      type: object
+      properties:
+        id: { type: integer, format: int64, example: 64 }
+        email: { type: string, format: email }
+        role: { type: string, enum: [user, admin] }
+        name: { type: string, nullable: true }
+        email_verified: { type: boolean }
+        has_password: { type: boolean }
+        has_google: { type: boolean }
+        created_at: { type: string, format: date-time }
+
+    Session:
+      type: object
+      properties:
+        access_token: { type: string }
+        refresh_token: { type: string }
+        token_type: { type: string, example: Bearer }
+        expires_in: { type: integer, description: Access-token lifetime in seconds., example: 900 }
+        user: { $ref: "#/components/schemas/User" }
+
+    Account:
+      type: object
+      description: One row of the admin account picker.
+      properties:
+        id: { type: integer, format: int64, example: 104 }
+        email: { type: string, format: email }
+        role: { type: string, enum: [user, admin] }
+        event_count: { type: integer, format: int64, example: 180 }
+        last_event_at: { type: string, format: date-time, nullable: true }
+
+    EventInput:
+      type: object
+      required: [type]
+      description: |
+        The brief's `action` and `metadata` are this API's `type` and `payload`. There is no
+        `user_id`: the author is the account in the token.
+      properties:
+        type:
+          type: string
+          maxLength: 64
+          description: Trimmed and lowercased, so `Page_View` and `page_view` are the same type.
+          example: page_view
+        payload:
+          type: object
+          description: Any JSON object up to 8 KB. Arrays and scalars are refused.
+          additionalProperties: true
+          example: { page: /home }
+        occurred_at:
+          type: string
+          format: date-time
+          description: |
+            When it happened. Defaults to now. At most 5 minutes into the future — a tolerance for
+            client clock skew — and at most 90 days into the past.
+        idempotency_key:
+          type: string
+          maxLength: 128
+          description: Unique per account. Also accepted as the `Idempotency-Key` header.
+
+    Event:
+      type: object
+      properties:
+        id: { type: integer, format: int64, example: 707 }
+        type: { type: string, example: page_view }
+        payload: { type: object, additionalProperties: true }
+        occurred_at: { type: string, format: date-time }
+        created_at: { type: string, format: date-time, description: Set by the database; cannot be supplied by a client. }
+        idempotency_key: { type: string, nullable: true }
+
+    EventPage:
+      type: object
+      properties:
+        user_id: { type: integer, format: int64, description: Whose feed this is. }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Event" }
+        next_cursor:
+          type: string
+          description: Pass back as `cursor`. Absent on the last page.
+
+    Bucket:
+      type: object
+      properties:
+        bucket_start: { type: string, format: date-time }
+        bucket_end: { type: string, format: date-time }
+        event_count: { type: integer, format: int64, example: 55 }
+        type_counts:
+          type: object
+          additionalProperties: { type: integer, format: int64 }
+          example: { page.view: 32, button.click: 12 }
+        first_event_at: { type: string, format: date-time }
+        last_event_at: { type: string, format: date-time }
+
+    Day:
+      type: object
+      properties:
+        day: { type: string, format: date, example: "2026-08-26" }
+        event_count: { type: integer, format: int64 }
+        type_counts:
+          type: object
+          additionalProperties: { type: integer, format: int64 }
+
+    Stats:
+      type: object
+      properties:
+        user_id: { type: integer, format: int64 }
+        from: { type: string, format: date-time }
+        to: { type: string, format: date-time }
+        bucket: { type: string, description: Window size the worker uses., example: 4h0m0s }
+        buckets:
+          type: array
+          description: Present unless `granularity=day`.
+          items: { $ref: "#/components/schemas/Bucket" }
+        days:
+          type: array
+          description: Present only with `granularity=day`.
+          items: { $ref: "#/components/schemas/Day" }
+
+    Run:
+      type: object
+      properties:
+        id: { type: integer, format: int64 }
+        bucket_start: { type: string, format: date-time }
+        bucket_end: { type: string, format: date-time }
+        status:
+          type: string
+          enum: [succeeded, failed, skipped]
+          description: "`skipped` means another process held the lock on this window."
+        trigger:
+          type: string
+          enum: [schedule, manual]
+        users_touched: { type: integer, example: 2 }
+        started_at: { type: string, format: date-time }
+        finished_at: { type: string, format: date-time, nullable: true }
+        error: { type: string, nullable: true }

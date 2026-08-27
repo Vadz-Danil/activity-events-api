@@ -25,8 +25,8 @@ export function SignIn({
   const [busy, setBusy] = useState(false)
   const [methods, setMethods] = useState<AuthMethods | null>(null)
 
-  // The server decides which options exist: offering a Google button on a
-  // deployment without Google credentials only produces a dead end.
+  // Сервер вирішує, які способи входу існують: кнопка Google на деплої без
+  // облікових даних Google веде лише в глухий кут.
   useEffect(() => {
     getAuthMethods()
       .then(setMethods)
