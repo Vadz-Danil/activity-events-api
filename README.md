@@ -129,6 +129,9 @@ make seed                 # optional demo data
 cd frontend && npm install && npm run dev
 ```
 
+The binaries read `.env` from the working directory, so run them from the repository root; inside Docker the
+variables already come from the environment and the file is not needed.
+
 `APP_MODE` picks what the process does: `api` serves HTTP, `worker` only aggregates, `all` does both. The deployment
 runs two containers from the same image; locally one process is simpler.
 

@@ -8,6 +8,8 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/joho/godotenv"
+
 	"github.com/Vadz-Danil/activity-events-api/internal/config"
 	"github.com/Vadz-Danil/activity-events-api/internal/database"
 	"github.com/Vadz-Danil/activity-events-api/internal/logger"
@@ -43,6 +45,9 @@ func main() {
 }
 
 func run() error {
+	// .env потрібен лише для локального запуску: у Docker змінні вже в оточенні процесу.
+	_ = godotenv.Load()
+
 	args := os.Args[1:]
 	if len(args) == 0 || args[0] == "help" || args[0] == "-h" || args[0] == "--help" {
 		fmt.Print(usage)

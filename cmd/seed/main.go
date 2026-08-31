@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/joho/godotenv"
 	"go.uber.org/zap"
 
 	"github.com/Vadz-Danil/activity-events-api/internal/auth"
@@ -89,6 +90,9 @@ func main() {
 }
 
 func run() error {
+	// .env потрібен лише для локального запуску: у Docker змінні вже в оточенні процесу.
+	_ = godotenv.Load()
+
 	cfg, err := config.LoadMigrations()
 	if err != nil {
 		return err
