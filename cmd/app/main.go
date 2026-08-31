@@ -31,7 +31,6 @@ func main() {
 }
 
 func run() error {
-	// .env потрібен лише для локального запуску: у Docker змінні вже в оточенні процесу.
 	_ = godotenv.Load()
 
 	cfg, err := config.Load()
